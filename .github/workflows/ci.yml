@@ -1,0 +1,55 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install Node dependencies
+        run: npm ci
+
+      - name: JavaScript syntax check
+        shell: bash
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          files=( *.cjs *.js *.mjs operations/*.cjs )
+          for file in "${files[@]}"; do
+            node --check "$file"
+          done
+
+      - name: Core translator tests
+        run: node test-lib.cjs
+
+      - name: MCP end-to-end gate
+        run: node test-tools.cjs
+
+      - name: Python office tests
+        run: python3 -m unittest discover -p 'test_office_*.py'
+
+      - name: Python box-helper tests
+        run: python3 -m unittest discover -p 'test_box_helper_*.py'
