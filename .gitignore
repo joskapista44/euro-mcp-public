@@ -1,0 +1,20 @@
+# Real credentials -- never commit an actual .env, only .env.example.
+.env
+.env.*
+!.env.example
+
+# Dependencies
+node_modules/
+
+# Python
+__pycache__/
+*.pyc
+
+# Runtime trace log, written by office-trace.cjs's logTrace() (mkdirSync recursive on first
+# call) -- an operational side-effect, not shipped source; its content depends on how many
+# times the tools have run, so it is never a stable part of a checked-in tree.
+store-office-trace/
+
+# OS/editor noise
+.DS_Store
+*.swp
