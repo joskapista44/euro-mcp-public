@@ -82,7 +82,6 @@ class FilterChoiceTests(unittest.TestCase):
     def test_an_unsupported_source_is_refused_with_the_list(self):
         with self.assertRaises(ExternalToolError) as ctx:
             pdf_filter_for("/tmp/notes.txt")
-        # The message has to be actionable without reading the source.
         self.assertIn(".txt", str(ctx.exception))
         self.assertIn(".docx", str(ctx.exception))
 
@@ -118,8 +117,9 @@ class ExportGuardTests(unittest.TestCase):
             with self.assertRaises(ExternalToolError) as ctx:
                 export_pdf(broken, os.path.join(self.tmp, "o.pdf"), 5)
         self.assertIn("not a valid office file", str(ctx.exception))
-        # The point of checking first: no container was started for a file that cannot work.
-        runner.assert_called_once()  # built, but never used to run anything
+        # Validation is intentionally engine-independent: a bad input must not even
+        # require runner discovery, let alone start a container or host process.
+        runner.assert_not_called()
 
     def test_no_pdf_is_left_behind_when_the_engine_fails(self):
         src = os.path.join(self.tmp, "book.xlsx")
@@ -147,13 +147,7 @@ class ExportGuardTests(unittest.TestCase):
 
 
 class EngineFailureModesTests(unittest.TestCase):
-    """The four ways an external tool fails, re-proven THROUGH the PDF entry point.
-
-    They are enforced in the shared runner, and the recalc suite covers them there -
-    but "the same function is called" is an argument, not evidence. These run the
-    real code path with a fake engine so the PDF tool's own behaviour is on record:
-    every mode ends in one clean error and no output file.
-    """
+    """The four ways an external tool fails, re-proven THROUGH the PDF entry point."""
 
     def setUp(self):
         self.tmp = tempfile.mkdtemp(prefix="office-pdf-modes-")
@@ -162,13 +156,11 @@ class EngineFailureModesTests(unittest.TestCase):
         self.out = os.path.join(self.tmp, "book.pdf")
 
     def _export(self, behavior, timeout=5):
-        # OFFICE_ENGINE=host pins the fake, so a machine WITH docker still tests the fake.
         with set_env(OFFICE_ENGINE="host", OFFICE_SOFFICE_BIN=FAKE,
                      FAKE_SOFFICE_BEHAVIOR=behavior):
             return export_pdf(self.src, self.out, timeout)
 
     def test_exit_zero_without_an_output_file_is_still_a_failure(self):
-        # The worst mode: the tool claims success and produces nothing.
         with self.assertRaises(ExternalToolError) as ctx:
             self._export("no-output")
         self.assertFalse(os.path.exists(self.out))
@@ -214,7 +206,6 @@ class ContractTests(unittest.TestCase):
         self.assertIn("outside the allowed roots", result["error"])
 
     def test_an_allowed_source_with_a_forbidden_DESTINATION_is_refused(self):
-        # Both ends are separate ways out of the sandbox.
         src = os.path.join(tempfile.gettempdir(), "ok.xlsx")
         make_xlsx(src)
         result = self._run({"file": src, "out_file": "/etc/out.pdf"})
@@ -239,34 +230,36 @@ class SheetSelectionTests(unittest.TestCase):
             office_pdf.main()
         return json.loads(out.getvalue())
 
+    def _run_reaching_engine(self, request):
+        # These tests prove that the workbook privacy gate permits the request to
+        # proceed. Runner discovery is not part of that contract, so replace it
+        # with a sentinel failure after all engine-independent validation passed.
+        with unittest.mock.patch.object(
+                office_pdf, "build_runner",
+                side_effect=ExternalToolError("engine not run here")):
+            return self._run(request)
+
     def test_a_multi_sheet_workbook_without_a_sheet_is_REFUSED(self):
-        # Fail closed: this is the PII gate. The whole workbook must be asked for.
         src = os.path.join(self.tmp, "book.xlsx")
         make_xlsx(src, sheets=("Plan", "Decision"))
         result = self._run({"file": src, "out_file": os.path.join(self.tmp, "o.pdf")})
         self.assertFalse(result["ok"])
         self.assertIn("sheet=", result["error"])
-        self.assertIn("Decision", result["error"])   # lists what is there to choose from
+        self.assertIn("Decision", result["error"])
 
     def test_a_single_sheet_workbook_needs_no_choice(self):
-        # Nothing to leak: the only sheet is the one the caller means.
         src = os.path.join(self.tmp, "one.xlsx")
         make_xlsx(src, sheets=("Only",))
-        with unittest.mock.patch.object(office_pdf, "prepare_profile"), \
-             unittest.mock.patch.object(office_pdf, "run_producing_file",
-                                        side_effect=ExternalToolError("engine not run here")):
-            result = self._run({"file": src, "out_file": os.path.join(self.tmp, "o.pdf")})
-        # It got past the gate and reached the engine, which is the point.
+        result = self._run_reaching_engine(
+            {"file": src, "out_file": os.path.join(self.tmp, "o.pdf")})
         self.assertIn("engine not run here", result["error"])
 
     def test_all_sheets_is_an_explicit_opt_in(self):
         src = os.path.join(self.tmp, "book.xlsx")
         make_xlsx(src, sheets=("Plan", "Decision"))
-        with unittest.mock.patch.object(office_pdf, "prepare_profile"), \
-             unittest.mock.patch.object(office_pdf, "run_producing_file",
-                                        side_effect=ExternalToolError("engine not run here")):
-            result = self._run({"file": src, "all_sheets": True,
-                                "out_file": os.path.join(self.tmp, "o.pdf")})
+        result = self._run_reaching_engine(
+            {"file": src, "all_sheets": True,
+             "out_file": os.path.join(self.tmp, "o.pdf")})
         self.assertIn("engine not run here", result["error"])
 
     def test_sheet_selection_is_refused_for_a_document(self):
