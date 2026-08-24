@@ -2,35 +2,34 @@
 
 ## Before you start
 
-This project was extracted from a larger internal deployment. If you hit a reference to
-something not in this repository (an internal ticket ID in a comment, a decision attributed to
-someone by name), that is expected -- it is the original reasoning left in place because it
-still explains the code, not a pointer to something you need to go find.
+Euro-MCP has one architectural boundary: document operations run through Euro-Office / OnlyOffice Document Server. Do not add a local Office engine, LibreOffice/`soffice` fallback, or direct on-disk OOXML editing path as an alternative execution engine.
+
+If the Document Server path cannot support a capability yet, keep that capability unavailable or extend the Euro-Office integration rather than bypassing it locally.
 
 ## Workflow
 
-1. Open an issue describing the bug or the change before sending a large patch -- for anything
-   beyond a small fix, agreeing on the approach first avoids wasted work on both sides.
-2. Keep changes scoped: one fix or one feature per pull request. Unrelated formatting/reordering
-   in the same diff makes the actual change harder to review and harder to revert if needed.
-3. Add or update a test with every behavior change. This codebase treats a test as the record of
-   *why* a piece of logic exists (see the `test_*`/`test-*` file headers) -- a change without a
-   test loses that record for the next person.
-4. Run the relevant test files before opening the PR (see README.md's "Running the tests"
-   section). There is no CI configured in this export; you are the first gate.
+1. Keep changes scoped to one fix or capability per pull request.
+2. Add or update tests for every behavior change.
+3. Run `npm test` before requesting review.
+4. Keep fake-backed tests credential-free; production secrets and customer documents must never be required by CI.
+5. Call out changes to transport, co-editing authorization, credential handling, or output-package validation explicitly in the PR description.
 
 ## Code style
 
-- Node/CJS: no build step, no bundler -- plain `require()`. Keep new modules dependency-light;
-  a new npm dependency should be justified in the PR description.
-- Python: no third-party packages, no `pip install` step. If a task looks like it needs one,
-  that is worth raising as a design question before adding it, not working around silently.
-- Match the file you are editing: comment density, naming, and error-message language (Hungarian
-  and English are both present in this codebase; a file is consistently one or the other).
+- Node/CJS is the primary runtime; there is no bundling/build step for the MCP server.
+- Keep dependencies small and justify new runtime dependencies.
+- Python is retained for the remote `box-helper.py` path and should remain standard-library-only unless there is a deliberate design change.
+- Match the naming and error-message language of the file being edited.
 
-## Security-sensitive changes
+## Architecture-sensitive changes
 
-Anything touching path validation (`office_paths.py`), the co-editing identity/allowlist logic
-(`coedit.cjs`'s `detectCallerId`), or credential handling (`runner.cjs`'s key resolution) should
-call that out explicitly in the PR description, even for a change that looks small. See
-`SECURITY.md` for how to report a vulnerability instead of opening a public PR.
+Changes touching these areas deserve extra review:
+
+- `coedit.cjs` caller identity and `EURO_COEDIT_AGENTS` authorization;
+- `runner.cjs` SSH key and remote execution handling;
+- `box-helper.py` Document Server/DocBuilder execution contract;
+- `lib.cjs`, `lib-operations-*.cjs`, `operations/*.cjs` OnlyOffice operation generation;
+- `package-consistency.cjs` output integrity checks;
+- the CI architecture guard that prevents local document-engine paths from returning.
+
+See `SECURITY.md` for private vulnerability reporting.
