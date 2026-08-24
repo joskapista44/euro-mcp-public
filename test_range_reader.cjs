@@ -1,6 +1,7 @@
 'use strict'
 
 const assert = require('assert')
+const fs = require('fs')
 const reader = require('./range-reader.cjs')
 
 let passed = 0
@@ -135,12 +136,27 @@ test('large A1:Z1000 request stays one command and is accepted at the 26k limit'
   assert.strictEqual(bulkGetRangeCalls, 1)
 })
 
-test('range limit fails closed before attempting worksheet access', () => {
-  let touched = false
-  const result = withApi({ GetSheet() { touched = true; return null } }, () => reader.rangeReaderCommand('Big', 'A1:Z1001', 26000))
+test('range limit fails closed before reading the requested range', () => {
+  let rangeTouched = false
+  const sheet = { GetRange() { rangeTouched = true; return null } }
+  const result = withApi({ GetSheet: () => sheet }, () => reader.rangeReaderCommand('Big', 'A1:Z1001', 26000))
   assert.strictEqual(result.ok, false)
   assert.strictEqual(result.outcome, 'range-too-large')
-  assert.strictEqual(touched, true) // command resolves sheet first, but does not read a range
+  assert.strictEqual(rangeTouched, false)
+})
+
+test('package entrypoint delivers M1.2 and preserves the co-edit-only boundary', () => {
+  const pkg = require('./package.json')
+  assert.strictEqual(pkg.main, 'euro-mcp-m12.cjs')
+  const entry = fs.readFileSync('./euro-mcp-m12.cjs', 'utf8')
+  assert.match(entry, /office_read_range/)
+  assert.match(entry, /readRangeLive/)
+  assert.match(entry, /require\('\.\/euro-mcp-m11\.cjs'\)/)
+  assert.doesNotMatch(entry, /runJob|run_builder_script|OOXML|unzip|DocBuilder fallback/)
+  const implementation = fs.readFileSync('./range-reader.cjs', 'utf8')
+  assert.match(implementation, /callCommand/)
+  assert.match(implementation, /spreadsheeteditor/)
+  assert.doesNotMatch(implementation, /execFileSync|unzip|runJob/)
 })
 
 console.log(`${passed} range reader tests passed`)
