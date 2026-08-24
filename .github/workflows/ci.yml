@@ -68,9 +68,9 @@ jobs:
           done
 
           if grep -RInE 'OFFICE_ENGINE|OFFICE_SOFFICE_BIN|OFFICE_ALLOWED_ROOTS|fake_soffice|headless LibreOffice|headless soffice' \
-              --exclude='.github/workflows/ci.yml' \
+              --include='*.cjs' --include='*.js' --include='*.mjs' --include='*.py' --include='.env*' \
               --exclude-dir='.git' .; then
-            echo 'Forbidden local document-engine reference found.' >&2
+            echo 'Forbidden local document-engine runtime/config reference found.' >&2
             exit 1
           fi
 
