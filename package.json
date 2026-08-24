@@ -2,10 +2,10 @@
   "name": "euro-mcp",
   "version": "1.0.0",
   "description": "MCP integration for Euro-Office / OnlyOffice Document Server",
-  "main": "euro-mcp-m11.cjs",
+  "main": "euro-mcp-m12.cjs",
   "scripts": {
     "test": "npm run test:js && npm run test:py",
-    "test:js": "node test-lib.cjs && node test-tools.cjs && node test-negallapotu-e3.cjs && node test-office-trace.cjs && node test_coedit_findpath.cjs && node test_coedit_identity.cjs && node test_coedit_read.cjs && node test_workbook_inspector.cjs && node test_euro_magok.cjs && node test_lib_create.cjs && node test_lib_office_read.cjs && node test_lib_xlsx_autofilter.cjs && node test_lib_xlsx_cells.cjs && node test_package_consistency.cjs && node test_stale_kod_guard.cjs && node test-capabilities-registry-build.mjs && node test-capability-status-model.mjs",
+    "test:js": "node test-lib.cjs && node test-tools.cjs && node test-negallapotu-e3.cjs && node test-office-trace.cjs && node test_coedit_findpath.cjs && node test_coedit_identity.cjs && node test_coedit_read.cjs && node test_workbook_inspector.cjs && node test_range_reader.cjs && node test_euro_magok.cjs && node test_lib_create.cjs && node test_lib_office_read.cjs && node test_lib_xlsx_autofilter.cjs && node test_lib_xlsx_cells.cjs && node test_package_consistency.cjs && node test_stale_kod_guard.cjs && node test-capabilities-registry-build.mjs && node test-capability-status-model.mjs",
     "test:py": "python3 test_box_helper_export_fields.py && python3 test_box_helper_kind.py"
   },
   "keywords": ["mcp", "onlyoffice", "document-server"],
