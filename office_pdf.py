@@ -8,6 +8,17 @@ headless run from touching a shared LibreOffice profile, the job workspace, and
 the four failure modes of an external tool. This module reuses all of it and only
 changes the target format - writing a second, parallel invocation would mean two
 places to fix the next LibreOffice trap.
+
+One such trap is already in the record: without
+`-env:UserInstallation=file:///work/profile` inside the mount, soffice in the
+container dies with "User installation could not be completed" and produces
+nothing. Measured today - which is exactly why this path goes through
+prepare_profile like recalc does, instead of assembling its own command.
+
+The other is the filter name: `--convert-to pdf` works for xlsx and pptx, but a
+docx source needs `pdf:writer_pdf_Export`. Plain `--convert-to docx` (the reverse
+direction) already failed today with "no export filter", so the filter is chosen
+per source type here rather than hoped for.
 """
 
 import json
@@ -18,14 +29,26 @@ import zipfile
 
 from office_paths import PathNotAllowed, check_path
 from office_sheets import SheetError, list_sheets, single_sheet_copy
-from office_recalc import ExternalToolError, build_runner, job_workspace, prepare_profile
+from office_recalc import (
+    ExternalToolError,
+    build_runner,
+    job_workspace,
+    prepare_profile,
+)
 from office_runner import run_producing_file
 
+# Source extension -> the filter that produces a PDF from it. The value is what
+# `--convert-to` receives, so it carries the LibreOffice filter name where the
+# bare "pdf" is ambiguous.
 PDF_FILTERS = {
-    ".xlsx": "pdf:calc_pdf_Export", ".xls": "pdf:calc_pdf_Export",
-    ".docx": "pdf:writer_pdf_Export", ".doc": "pdf:writer_pdf_Export",
-    ".odt": "pdf:writer_pdf_Export", ".ods": "pdf:calc_pdf_Export",
-    ".pptx": "pdf:impress_pdf_Export", ".ppt": "pdf:impress_pdf_Export",
+    ".xlsx": "pdf:calc_pdf_Export",
+    ".xls": "pdf:calc_pdf_Export",
+    ".docx": "pdf:writer_pdf_Export",
+    ".doc": "pdf:writer_pdf_Export",
+    ".odt": "pdf:writer_pdf_Export",
+    ".ods": "pdf:calc_pdf_Export",
+    ".pptx": "pdf:impress_pdf_Export",
+    ".ppt": "pdf:impress_pdf_Export",
     ".odp": "pdf:impress_pdf_Export",
 }
 
@@ -42,7 +65,12 @@ def pdf_filter_for(path):
 
 
 def export_pdf(path, out_path, timeout, report=None, sheet=None, all_sheets=False):
-    """Write `path` as a PDF at `out_path`. Returns the engine description."""
+    """Write `path` as a PDF at `out_path`. Returns the engine description.
+
+    The output is only put in place once a real PDF exists, so a failed export
+    never leaves a truncated file behind - and never silently overwrites a good
+    PDF from an earlier run with nothing.
+    """
     # Validate everything that does not require LibreOffice before selecting an
     # engine. Besides producing better errors, this keeps validation deterministic
     # on clean machines where neither the container image nor soffice is installed.
@@ -50,6 +78,8 @@ def export_pdf(path, out_path, timeout, report=None, sheet=None, all_sheets=Fals
         raise ExternalToolError("file not found: " + path)
     if os.path.isdir(path):
         raise ExternalToolError("not a file: " + path)
+    # Office formats are zips; catching it here gives a clear message instead of a
+    # LibreOffice error twenty seconds later.
     if os.path.splitext(path)[1].lower() in (".xlsx", ".docx", ".pptx"):
         try:
             with zipfile.ZipFile(path):
@@ -69,8 +99,13 @@ def export_pdf(path, out_path, timeout, report=None, sheet=None, all_sheets=Fals
         try:
             sheets = list_sheets(path)
         except SheetError as exc:
+            # An unreadable workbook must not surface as a stray traceback just
+            # because we asked it how many sheets it has.
             raise ExternalToolError(str(exc))
         if len(sheets) > 1:
+            # Fail closed. LibreOffice exports EVERY sheet, hidden ones included, so
+            # a whole-workbook PDF of a customer file can carry personal data from
+            # sheets nobody asked for. Exporting all of them has to be asked for.
             listing = ", ".join(
                 "%s%s" % (n, " (hidden)" if hidden else "") for n, hidden in sheets
             )
@@ -95,7 +130,12 @@ def export_pdf(path, out_path, timeout, report=None, sheet=None, all_sheets=Fals
         os.makedirs(os.path.join(jobdir, "out"))
         out_local = os.path.join(jobdir, "out", produced)
 
+        # No recalculation: the PDF must show what the file stores. With a single
+        # extracted sheet a recalc would resolve references to the removed sheets as
+        # #REF!, and even on a whole workbook it would silently change numbers the
+        # caller never asked to change.
         prepare_profile(runner, jobdir, timeout, force_recalc=False)
+
         run_producing_file(
             runner.command(jobdir, [
                 "--headless", "--norestore",
@@ -112,7 +152,7 @@ def export_pdf(path, out_path, timeout, report=None, sheet=None, all_sheets=Fals
 def main():
     try:
         req = json.load(sys.stdin)
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - any parse failure becomes a clean result
         json.dump({"ok": False, "error": "invalid request JSON: %s" % exc}, sys.stdout)
         return
 
@@ -122,6 +162,8 @@ def main():
         return
     timeout = req.get("timeout", 180)
 
+    # Both ends are guarded: reading a file the tools may not read, and writing a
+    # PDF somewhere they may not write, are two separate ways to leave the sandbox.
     try:
         path = check_path(path)
         out_path = req.get("out_file") or os.path.splitext(path)[0] + ".pdf"
@@ -137,7 +179,7 @@ def main():
     except ExternalToolError as exc:
         json.dump({"ok": False, "error": str(exc)}, sys.stdout)
         return
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - a bug here must not leak a traceback
         import traceback
         traceback.print_exc(file=sys.stderr)
         json.dump({"ok": False, "error": "pdf export failed: %s" % exc}, sys.stdout)
