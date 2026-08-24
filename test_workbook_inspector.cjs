@@ -57,14 +57,17 @@ async function main() {
   assert.match(seen.fn, /callCommand/)
   assert.match(seen.fn, /callback-timeout/)
 
-  // The package entrypoint must actually register the caller-facing tool; module-only code is
-  // not a delivered capability. Also pin the architectural boundary in the test itself.
+  // The package entrypoint must still deliver the M1.1 tool after later milestones wrap it.
+  // M1.2 deliberately chains euro-mcp-m12 -> euro-mcp-m11 -> base server; pin that chain instead
+  // of freezing package.main forever to the M1.1 filename.
   const pkg = require('./package.json')
-  assert.equal(pkg.main, 'euro-mcp-m11.cjs')
-  const entry = fs.readFileSync('./euro-mcp-m11.cjs', 'utf8')
-  assert.match(entry, /office_inspect_workbook/)
-  assert.match(entry, /inspectWorkbookLive/)
-  assert.doesNotMatch(entry, /runJob|run_builder_script|DocBuilder fallback/)
+  assert.equal(pkg.main, 'euro-mcp-m12.cjs')
+  const topEntry = fs.readFileSync(`./${pkg.main}`, 'utf8')
+  assert.match(topEntry, /require\('\.\/euro-mcp-m11\.cjs'\)/)
+  const m11Entry = fs.readFileSync('./euro-mcp-m11.cjs', 'utf8')
+  assert.match(m11Entry, /office_inspect_workbook/)
+  assert.match(m11Entry, /inspectWorkbookLive/)
+  assert.doesNotMatch(m11Entry, /runJob|run_builder_script|DocBuilder fallback/)
 
   console.log('PASS test_workbook_inspector')
 }
