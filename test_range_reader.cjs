@@ -145,9 +145,11 @@ test('range limit fails closed before reading the requested range', () => {
   assert.strictEqual(rangeTouched, false)
 })
 
-test('package entrypoint delivers M1.2 and preserves the co-edit-only boundary', () => {
+test('package entrypoint preserves M1.2 and the co-edit-only boundary through later wrappers', () => {
   const pkg = require('./package.json')
-  assert.strictEqual(pkg.main, 'euro-mcp-m12.cjs')
+  assert.match(pkg.main, /^euro-mcp-m\d+\.cjs$/)
+  const topEntry = fs.readFileSync(`./${pkg.main}`, 'utf8')
+  if (pkg.main !== 'euro-mcp-m12.cjs') assert.match(topEntry, /require\('\.\/euro-mcp-m12\.cjs'\)/)
   const entry = fs.readFileSync('./euro-mcp-m12.cjs', 'utf8')
   assert.match(entry, /office_read_range/)
   assert.match(entry, /readRangeLive/)
