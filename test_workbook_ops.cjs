@@ -9,7 +9,8 @@ function makeApi() {
     const ranges = new Map()
     const sheet = {
       _name: name,
-      _position: 0,
+      _move: null,
+      GetName() { return this._name },
       GetRange(address) {
         if (!ranges.has(address)) ranges.set(address, {
           address,
@@ -17,24 +18,25 @@ function makeApi() {
           inserted: [],
           deleted: [],
           copiedTo: null,
-          movedTo: null,
-          Clear() { this.cleared = true },
+          cutTo: null,
+          Clear() { this.cleared = true; return true },
           Copy(target) { this.copiedTo = target.address },
-          Move(target) { this.movedTo = target.address },
+          Cut(target) { this.cutTo = target.address },
           Insert(shift) { this.inserted.push(shift) },
           Delete(shift) { this.deleted.push(shift) },
         })
         return ranges.get(address)
       },
       SetName(next) { sheets.delete(this._name); this._name = next; sheets.set(next, this) },
-      Delete() { sheets.delete(this._name) },
-      Copy(next) { const c = mkSheet(next); sheets.set(next, c); return c },
-      SetPosition(i) { this._position = i },
+      Delete() { sheets.delete(this._name); return true },
+      Copy() { const c = mkSheet(this._name + ' (copy)'); sheets.set(c._name, c); return c },
+      Move(before, after) { this._move = { before: before ? before._name : null, after: after ? after._name : null } },
     }
     return sheet
   }
   const api = {
     GetSheet(name) { return sheets.get(name) || null },
+    GetSheets() { return Array.from(sheets.values()) },
     AddSheet(name) { const sh = mkSheet(name); sheets.set(name, sh); return sh },
   }
   api.AddSheet('Sheet1')
@@ -50,19 +52,22 @@ function run(op, api) {
 {
   const { api, sheets } = makeApi()
   assert.equal(run({ type: 'sheet.create', name: 'Sales' }, api).ok, true)
-  assert.ok(sheets.has('Sales'))
   assert.equal(run({ type: 'sheet.rename', sheet: 'Sales', name: 'Revenue' }, api).ok, true)
   assert.ok(sheets.has('Revenue'))
   assert.equal(run({ type: 'sheet.copy', sheet: 'Revenue', name: 'Revenue Copy' }, api).ok, true)
   assert.ok(sheets.has('Revenue Copy'))
-  assert.equal(run({ type: 'sheet.move', sheet: 'Revenue Copy', index: 0 }, api).ok, true)
-  assert.equal(sheets.get('Revenue Copy')._position, 0)
+  api.AddSheet('Anchor')
+  assert.equal(run({ type: 'sheet.move', sheet: 'Revenue Copy', position: 'before', referenceSheet: 'Anchor' }, api).ok, true)
+  assert.deepEqual(sheets.get('Revenue Copy')._move, { before: 'Anchor', after: null })
+  assert.equal(run({ type: 'sheet.move', sheet: 'Revenue Copy', position: 'after', referenceSheet: 'Revenue' }, api).ok, true)
+  assert.deepEqual(sheets.get('Revenue Copy')._move, { before: null, after: 'Revenue' })
   assert.equal(run({ type: 'sheet.delete', sheet: 'Revenue Copy' }, api).ok, true)
   assert.ok(!sheets.has('Revenue Copy'))
 }
 
 {
   const { api } = makeApi()
+  api.AddSheet('Keep')
   let r = run({ type: 'range.clear', sheet: 'Sheet1', range: 'A1:B2' }, api)
   assert.equal(r.ok, true)
   assert.equal(api.GetSheet('Sheet1').GetRange('A1:B2').cleared, true)
@@ -73,7 +78,7 @@ function run(op, api) {
 
   r = run({ type: 'range.move', sheet: 'Sheet1', range: 'A1:B2', targetRange: 'G1:H2' }, api)
   assert.equal(r.ok, true)
-  assert.equal(api.GetSheet('Sheet1').GetRange('A1:B2').movedTo, 'G1:H2')
+  assert.equal(api.GetSheet('Sheet1').GetRange('A1:B2').cutTo, 'G1:H2')
 
   assert.equal(run({ type: 'rows.insert', sheet: 'Sheet1', range: '2:2' }, api).ok, true)
   assert.equal(api.GetSheet('Sheet1').GetRange('2:2').inserted[0], 'down')
@@ -91,6 +96,13 @@ function run(op, api) {
   const r = run({ type: 'sheet.copy', sheet: 'Sheet1', name: 'X' }, api)
   assert.equal(r.ok, false)
   assert.equal(r.outcome, 'unsupported')
+}
+
+{
+  const { api } = makeApi()
+  const r = run({ type: 'sheet.delete', sheet: 'Sheet1' }, api)
+  assert.equal(r.ok, false)
+  assert.equal(r.outcome, 'last-sheet')
 }
 
 {
