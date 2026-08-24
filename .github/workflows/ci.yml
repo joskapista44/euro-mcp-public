@@ -1,0 +1,91 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Document Server-only architecture guard
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          forbidden_files=(
+            office-mcp.js
+            office-lo.Dockerfile
+            office_recalc.py
+            office_recalc_gate.py
+            office_runner.py
+            office_pdf.py
+            office_xlsx.py
+            office_docx.py
+            office_docx_build.py
+            office_pptx.py
+            office_pptx_build.py
+            office_sheets.py
+            office_ooxml_text.py
+            office_build_gate.py
+            office_e2e.py
+            office_paths.py
+            fake_soffice.py
+            fake_soffice_recalc.py
+            office-mcp.README.md
+            DESIGN-office-toolkit.md
+          )
+
+          for path in "${forbidden_files[@]}"; do
+            if [[ -e "$path" ]]; then
+              echo "Forbidden local document-engine file returned: $path" >&2
+              exit 1
+            fi
+          done
+
+          if grep -RInE 'OFFICE_ENGINE|OFFICE_SOFFICE_BIN|OFFICE_ALLOWED_ROOTS|fake_soffice|headless LibreOffice|headless soffice' \
+              --exclude='.github/workflows/ci.yml' \
+              --exclude-dir='.git' .; then
+            echo 'Forbidden local document-engine reference found.' >&2
+            exit 1
+          fi
+
+      - name: JavaScript syntax check
+        shell: bash
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          files=( *.cjs *.js *.mjs operations/*.cjs )
+          for file in "${files[@]}"; do
+            node --check "$file"
+          done
+
+      - name: Python syntax check
+        run: python3 -m py_compile box-helper.py test_box_helper_export_fields.py test_box_helper_kind.py
+
+      - name: Test suite
+        run: npm test
