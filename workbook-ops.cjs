@@ -2,7 +2,7 @@
 
 // M1.3 Core Workbook Operations.
 // Existing workbooks are modified only through the CURRENT in-memory ONLYOFFICE
-// spreadsheet editor session. No DocBuilder and no saved-OOXML fallback lives here.
+// spreadsheet editor session. No DocBuilder and no saved-file rewrite fallback lives here.
 
 function operationCommand(op) {
   function has(o, n) { return !!o && typeof o[n] === 'function' }
@@ -26,59 +26,70 @@ function operationCommand(op) {
     if (!op || typeof op.type !== 'string') return fail('invalid-operation', 'operation.type is required')
 
     if (op.type === 'sheet.create') {
+      if (!op.name) return fail('invalid-operation', 'name is required', { operation: op.type })
       if (!has(Api, 'AddSheet')) return unsupported(op.type, 'Api.AddSheet is unavailable')
       if (getSheet(op.name)) return fail('already-exists', 'worksheet already exists', { sheet: op.name })
-      var created = Api.AddSheet(op.name)
-      return { ok: true, outcome: 'ok', source: 'live-coedit-editor', operation: op.type, sheet: op.name, result: created === undefined ? null : created }
+      Api.AddSheet(op.name)
+      if (!getSheet(op.name)) return fail('verification-failed', 'AddSheet returned without exposing the new worksheet', { sheet: op.name })
+      return { ok: true, outcome: 'ok', source: 'live-coedit-editor', operation: op.type, sheet: op.name }
     }
 
     if (op.type === 'sheet.rename') {
+      if (!op.sheet || !op.name) return fail('invalid-operation', 'sheet and name are required', { operation: op.type })
       var renameSheet = getSheet(op.sheet)
       if (!renameSheet) return fail('sheet-not-found', 'the requested worksheet was not found', { sheet: op.sheet })
       if (getSheet(op.name)) return fail('already-exists', 'target worksheet name already exists', { sheet: op.name })
       if (!has(renameSheet, 'SetName')) return unsupported(op.type, 'ApiWorksheet.SetName is unavailable')
       renameSheet.SetName(op.name)
+      if (!getSheet(op.name)) return fail('verification-failed', 'SetName completed but the target worksheet name is not visible', { sheet: op.sheet, name: op.name })
       return { ok: true, outcome: 'ok', source: 'live-coedit-editor', operation: op.type, sheet: op.sheet, name: op.name }
     }
 
     if (op.type === 'sheet.delete') {
+      if (!op.sheet) return fail('invalid-operation', 'sheet is required', { operation: op.type })
       var deleteSheet = getSheet(op.sheet)
       if (!deleteSheet) return fail('sheet-not-found', 'the requested worksheet was not found', { sheet: op.sheet })
-      if (has(deleteSheet, 'Delete')) deleteSheet.Delete()
-      else if (has(Api, 'DeleteSheet')) Api.DeleteSheet(op.sheet)
-      else return unsupported(op.type, 'neither ApiWorksheet.Delete nor Api.DeleteSheet is available')
+      if (has(Api, 'GetSheets')) {
+        var currentSheets = Api.GetSheets()
+        if (currentSheets && currentSheets.length <= 1) return fail('last-sheet', 'refusing to delete the last worksheet', { sheet: op.sheet })
+      }
+      if (!has(deleteSheet, 'Delete')) return unsupported(op.type, 'ApiWorksheet.Delete is unavailable')
+      var deleted = deleteSheet.Delete()
+      if (deleted === false || getSheet(op.sheet)) return fail('verification-failed', 'worksheet Delete did not remove the sheet', { sheet: op.sheet })
       return { ok: true, outcome: 'ok', source: 'live-coedit-editor', operation: op.type, sheet: op.sheet }
     }
 
     if (op.type === 'sheet.copy') {
+      if (!op.sheet || !op.name) return fail('invalid-operation', 'sheet and name are required', { operation: op.type })
       var copySheet = getSheet(op.sheet)
       if (!copySheet) return fail('sheet-not-found', 'the requested worksheet was not found', { sheet: op.sheet })
       if (getSheet(op.name)) return fail('already-exists', 'target worksheet name already exists', { sheet: op.name })
-      var copied = null
-      if (has(copySheet, 'Copy')) copied = copySheet.Copy(op.name)
-      else if (has(Api, 'CopySheet')) copied = Api.CopySheet(op.sheet, op.name)
-      else return unsupported(op.type, 'neither ApiWorksheet.Copy nor Api.CopySheet is available')
-      if (!getSheet(op.name) && copied && has(copied, 'SetName')) copied.SetName(op.name)
-      if (!getSheet(op.name)) return fail('verification-failed', 'copy call returned without exposing the target worksheet', { sheet: op.sheet, name: op.name })
+      // Worksheet copy is version-dependent in the live API. Probe it and fail closed when absent.
+      if (!has(copySheet, 'Copy')) return unsupported(op.type, 'ApiWorksheet.Copy is unavailable')
+      var copied = copySheet.Copy()
+      if (!copied) return fail('copy-failed', 'ApiWorksheet.Copy returned no worksheet', { sheet: op.sheet })
+      if (!has(copied, 'SetName')) return unsupported(op.type, 'copied ApiWorksheet.SetName is unavailable')
+      copied.SetName(op.name)
+      if (!getSheet(op.name)) return fail('verification-failed', 'copy completed but target worksheet is not visible', { sheet: op.sheet, name: op.name })
       return { ok: true, outcome: 'ok', source: 'live-coedit-editor', operation: op.type, sheet: op.sheet, name: op.name }
     }
 
     if (op.type === 'sheet.move') {
+      if (!op.sheet || !op.referenceSheet || (op.position !== 'before' && op.position !== 'after')) return fail('invalid-operation', 'sheet.move requires sheet, referenceSheet and position=before|after', { operation: op.type })
       var moveSheet = getSheet(op.sheet)
-      if (!moveSheet) return fail('sheet-not-found', 'the requested worksheet was not found', { sheet: op.sheet })
-      if (!Number.isInteger(op.index) || op.index < 0) return fail('invalid-index', 'index must be a zero-based non-negative integer')
-      if (has(moveSheet, 'SetPosition')) moveSheet.SetPosition(op.index)
-      else if (has(moveSheet, 'Move')) moveSheet.Move(op.index)
-      else if (has(Api, 'MoveSheet')) Api.MoveSheet(op.sheet, op.index)
-      else return unsupported(op.type, 'no live worksheet move API is available')
-      return { ok: true, outcome: 'ok', source: 'live-coedit-editor', operation: op.type, sheet: op.sheet, index: op.index }
+      var referenceSheet = getSheet(op.referenceSheet)
+      if (!moveSheet || !referenceSheet) return fail('sheet-not-found', 'worksheet or reference worksheet was not found', { sheet: op.sheet, referenceSheet: op.referenceSheet })
+      if (!has(moveSheet, 'Move')) return unsupported(op.type, 'ApiWorksheet.Move is unavailable')
+      if (op.position === 'before') moveSheet.Move(referenceSheet, null)
+      else moveSheet.Move(null, referenceSheet)
+      return { ok: true, outcome: 'ok', source: 'live-coedit-editor', operation: op.type, sheet: op.sheet, position: op.position, referenceSheet: op.referenceSheet }
     }
 
     if (op.type === 'range.clear') {
       var rc = requireRange(op.sheet, op.range); if (rc.error) return rc.error
-      if (has(rc.range, 'Clear')) rc.range.Clear()
-      else if (has(rc.range, 'SetValue')) rc.range.SetValue('')
-      else return unsupported(op.type, 'neither ApiRange.Clear nor ApiRange.SetValue is available')
+      if (!has(rc.range, 'Clear')) return unsupported(op.type, 'ApiRange.Clear is unavailable')
+      var cleared = rc.range.Clear()
+      if (cleared === false) return fail('operation-error', 'ApiRange.Clear returned false', { operation: op.type })
       return { ok: true, outcome: 'ok', source: 'live-coedit-editor', operation: op.type, sheet: op.sheet, range: op.range }
     }
 
@@ -86,15 +97,9 @@ function operationCommand(op) {
       var src = requireRange(op.sheet, op.range); if (src.error) return src.error
       var dstSheetName = op.targetSheet || op.sheet
       var dst = requireRange(dstSheetName, op.targetRange); if (dst.error) return dst.error
-      var did = false
-      if (op.type === 'range.copy') {
-        if (has(src.range, 'Copy')) { src.range.Copy(dst.range); did = true }
-        else if (has(src.range, 'CopyTo')) { src.range.CopyTo(dst.range); did = true }
-      } else {
-        if (has(src.range, 'Move')) { src.range.Move(dst.range); did = true }
-        else if (has(src.range, 'MoveTo')) { src.range.MoveTo(dst.range); did = true }
-      }
-      if (!did) return unsupported(op.type, 'no compatible live ApiRange copy/move method is available')
+      var methodName = op.type === 'range.copy' ? 'Copy' : 'Cut'
+      if (!has(src.range, methodName)) return unsupported(op.type, 'ApiRange.' + methodName + ' is unavailable')
+      src.range[methodName](dst.range)
       return { ok: true, outcome: 'ok', source: 'live-coedit-editor', operation: op.type, sheet: op.sheet, range: op.range, targetSheet: dstSheetName, targetRange: op.targetRange }
     }
 
@@ -103,13 +108,9 @@ function operationCommand(op) {
       var isInsert = /\.insert$/.test(op.type)
       var isRows = /^rows\./.test(op.type)
       var shift = isRows ? (isInsert ? 'down' : 'up') : (isInsert ? 'right' : 'left')
-      var methodName = isInsert ? 'Insert' : 'Delete'
-      if (!has(structural.range, methodName)) return unsupported(op.type, 'ApiRange.' + methodName + ' is unavailable')
-      try { structural.range[methodName](shift) }
-      catch (e) {
-        try { structural.range[methodName]() }
-        catch (e2) { return fail('operation-error', String(e2 && e2.message ? e2.message : e2), { operation: op.type }) }
-      }
+      var structuralMethod = isInsert ? 'Insert' : 'Delete'
+      if (!has(structural.range, structuralMethod)) return unsupported(op.type, 'ApiRange.' + structuralMethod + ' is unavailable')
+      structural.range[structuralMethod](shift)
       return { ok: true, outcome: 'ok', source: 'live-coedit-editor', operation: op.type, sheet: op.sheet, range: op.range, shift: shift }
     }
 
@@ -135,7 +136,7 @@ async function runOperationInFrame(frame, apiHely, operation, timeoutMs = 15000)
 
 async function runOperationLive({ url, user, pass, fileId, operation, loadPlaywright, timeoutMs = 60000, callbackTimeoutMs = 15000 }) {
   const loaded = loadPlaywright()
-  if (!loaded.ok) return { ok: false, outcome: 'nem-mert', error: loaded.indok }
+  if (!loaded.ok) return { ok: false, outcome: 'nem-mert', source: 'live-coedit-editor', error: loaded.indok }
   const { chromium } = loaded.pw
   const browser = await chromium.launch()
   try {
@@ -145,17 +146,17 @@ async function runOperationLive({ url, user, pass, fileId, operation, loadPlaywr
     await page.fill('#user', user); await page.fill('#password', pass)
     await Promise.all([page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: timeoutMs }).catch(() => null), page.click('button[type=submit], input[type=submit]')])
     await page.waitForTimeout(2500)
-    if (/\/login/.test(page.url())) return { ok: false, outcome: 'auth', error: 'login failed' }
+    if (/\/login/.test(page.url())) return { ok: false, outcome: 'auth', source: 'live-coedit-editor', error: 'login failed' }
     await page.goto(`${url}/index.php/apps/eurooffice/${fileId}`, { waitUntil: 'domcontentloaded', timeout: timeoutMs })
     await page.waitForTimeout(22000)
     const frame = page.frames().find((f) => /spreadsheeteditor/.test(f.url()))
-    if (!frame) return { ok: false, outcome: 'nem-nyilt-meg', error: 'spreadsheeteditor frame not found' }
+    if (!frame) return { ok: false, outcome: 'nem-nyilt-meg', source: 'live-coedit-editor', error: 'spreadsheeteditor frame not found' }
     const api = await frame.evaluate(() => {
       if ((window.Asc || {}).editor && typeof window.Asc.editor.callCommand === 'function') return 'window.Asc.editor'
       if (window.editor && typeof window.editor.callCommand === 'function') return 'window.editor'
       return null
     })
-    if (!api) return { ok: false, outcome: 'nincs-api', error: 'callCommand is unavailable on known editor objects' }
+    if (!api) return { ok: false, outcome: 'nincs-api', source: 'live-coedit-editor', error: 'callCommand is unavailable on known editor objects' }
     const result = await runOperationInFrame(frame, api, operation, callbackTimeoutMs)
     return { ...result, editor: 'spreadsheeteditor', apiHely: api }
   } finally { await browser.close().catch(() => {}) }
