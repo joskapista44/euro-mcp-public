@@ -2,7 +2,8 @@
 
 const { StdioServerTransport } = require('@modelcontextprotocol/sdk/server/stdio.js')
 const { z } = require('zod')
-const { server } = require('./euro-mcp-m13.cjs')
+const { server } = require('./euro-mcp-m12.cjs')
+require('./euro-mcp-m13.cjs') // registers M1.3 tools on the same cached server instance
 const coedit = require('./coedit.cjs')
 const bulkWriter = require('./bulk-writer.cjs')
 
