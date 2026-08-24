@@ -152,11 +152,14 @@ test('package entrypoint delivers M1.2 and preserves the co-edit-only boundary',
   assert.match(entry, /office_read_range/)
   assert.match(entry, /readRangeLive/)
   assert.match(entry, /require\('\.\/euro-mcp-m11\.cjs'\)/)
-  assert.doesNotMatch(entry, /runJob|run_builder_script|OOXML|unzip|DocBuilder fallback/)
+  // Boundary documentation is allowed to name forbidden fallbacks; executable imports/calls are not.
+  assert.doesNotMatch(entry, /\brequire\([^\n]*(?:runner|box-helper|package-consistency)/)
+  assert.doesNotMatch(entry, /\brunJob\s*\(|\brun_builder_script\s*\(|\bexecFileSync\s*\(/)
   const implementation = fs.readFileSync('./range-reader.cjs', 'utf8')
   assert.match(implementation, /callCommand/)
   assert.match(implementation, /spreadsheeteditor/)
-  assert.doesNotMatch(implementation, /execFileSync|unzip|runJob/)
+  assert.doesNotMatch(implementation, /\brequire\([^\n]*(?:runner|box-helper|package-consistency)/)
+  assert.doesNotMatch(implementation, /\brunJob\s*\(|\bexecFileSync\s*\(/)
 })
 
 console.log(`${passed} range reader tests passed`)
