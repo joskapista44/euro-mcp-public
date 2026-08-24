@@ -16,7 +16,8 @@ const operationSchema = z.object({
   ]),
   sheet: z.string().min(1).optional(),
   name: z.string().min(1).optional(),
-  index: z.number().int().nonnegative().optional(),
+  position: z.enum(['before', 'after']).optional(),
+  referenceSheet: z.string().min(1).optional(),
   range: z.string().min(1).optional(),
   targetSheet: z.string().min(1).optional(),
   targetRange: z.string().min(1).optional(),
@@ -26,7 +27,7 @@ server.tool(
   'office_workbook_operation',
   'Performs one core workbook edit against the CURRENT live ONLYOFFICE spreadsheet co-edit session. ' +
     'Supported operation families: worksheet create/copy/delete/rename/move, range clear/copy/move, ' +
-    'and row/column insert/delete. Unsupported editor methods fail closed; there is no saved-file or builder fallback.',
+    'and row/column insert/delete. Unsupported editor methods fail closed; there is no saved-file rewrite or builder fallback.',
   { file_id: z.string(), operation: operationSchema },
   async ({ file_id, operation }) => {
     const hivo = coedit.detectCallerId()
