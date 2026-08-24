@@ -1,5 +1,6 @@
 'use strict'
 const assert = require('assert')
+const fs = require('fs')
 const { parseA1Range, enrichInspection, workbookInspectorCommand, inspectWorkbookInFrame } = require('./workbook-inspector.cjs')
 
 async function main() {
@@ -55,6 +56,15 @@ async function main() {
   assert.equal(seen.arg.timeout, 4321)
   assert.match(seen.fn, /callCommand/)
   assert.match(seen.fn, /callback-timeout/)
+
+  // The package entrypoint must actually register the caller-facing tool; module-only code is
+  // not a delivered capability. Also pin the architectural boundary in the test itself.
+  const pkg = require('./package.json')
+  assert.equal(pkg.main, 'euro-mcp-m11.cjs')
+  const entry = fs.readFileSync('./euro-mcp-m11.cjs', 'utf8')
+  assert.match(entry, /office_inspect_workbook/)
+  assert.match(entry, /inspectWorkbookLive/)
+  assert.doesNotMatch(entry, /runJob|run_builder_script|DocBuilder fallback/)
 
   console.log('PASS test_workbook_inspector')
 }
