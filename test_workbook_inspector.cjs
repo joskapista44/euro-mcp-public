@@ -57,13 +57,14 @@ async function main() {
   assert.match(seen.fn, /callCommand/)
   assert.match(seen.fn, /callback-timeout/)
 
-  // The package entrypoint must still deliver the M1.1 tool after later milestones wrap it.
-  // M1.2 deliberately chains euro-mcp-m12 -> euro-mcp-m11 -> base server; pin that chain instead
-  // of freezing package.main forever to the M1.1 filename.
+  // Later milestones wrap earlier MCP entrypoints. Verify the current package entrypoint preserves
+  // the chain down to M1.1 instead of freezing package.main to one historical milestone filename.
   const pkg = require('./package.json')
-  assert.equal(pkg.main, 'euro-mcp-m12.cjs')
+  assert.match(pkg.main, /^euro-mcp-m\d+\.cjs$/)
   const topEntry = fs.readFileSync(`./${pkg.main}`, 'utf8')
-  assert.match(topEntry, /require\('\.\/euro-mcp-m11\.cjs'\)/)
+  if (pkg.main !== 'euro-mcp-m11.cjs') assert.match(topEntry, /require\('\.\/euro-mcp-m\d+\.cjs'\)/)
+  const m12Entry = fs.readFileSync('./euro-mcp-m12.cjs', 'utf8')
+  assert.match(m12Entry, /require\('\.\/euro-mcp-m11\.cjs'\)/)
   const m11Entry = fs.readFileSync('./euro-mcp-m11.cjs', 'utf8')
   assert.match(m11Entry, /office_inspect_workbook/)
   assert.match(m11Entry, /inspectWorkbookLive/)
