@@ -148,8 +148,21 @@ test('range limit fails closed before reading the requested range', () => {
 test('package entrypoint preserves M1.2 and the co-edit-only boundary through later wrappers', () => {
   const pkg = require('./package.json')
   assert.match(pkg.main, /^euro-mcp-m\d+\.cjs$/)
-  const topEntry = fs.readFileSync(`./${pkg.main}`, 'utf8')
-  if (pkg.main !== 'euro-mcp-m12.cjs') assert.match(topEntry, /require\('\.\/euro-mcp-m12\.cjs'\)/)
+
+  let current = pkg.main
+  const seen = new Set()
+  let reachedM12 = false
+  while (current) {
+    assert(!seen.has(current), `wrapper cycle detected at ${current}`)
+    seen.add(current)
+    const src = fs.readFileSync(`./${current}`, 'utf8')
+    if (current === 'euro-mcp-m12.cjs') { reachedM12 = true; break }
+    const match = src.match(/require\('\.\/(euro-mcp-m\d+\.cjs)'\)/)
+    assert(match, `${current} must delegate to an earlier MCP wrapper`)
+    current = match[1]
+  }
+  assert.strictEqual(reachedM12, true, `entrypoint chain must reach euro-mcp-m12.cjs; saw ${[...seen].join(' -> ')}`)
+
   const entry = fs.readFileSync('./euro-mcp-m12.cjs', 'utf8')
   assert.match(entry, /office_read_range/)
   assert.match(entry, /readRangeLive/)
