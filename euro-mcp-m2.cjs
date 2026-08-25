@@ -1,4 +1,4 @@
-' strict'
+'use strict'
 
 const { StdioServerTransport } = require('@modelcontextprotocol/sdk/server/stdio.js')
 const { z } = require('zod')
