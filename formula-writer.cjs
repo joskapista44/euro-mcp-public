@@ -1,12 +1,11 @@
 'use strict'
 
-const { parseA1Range } = require('./range-reader.cjs')
-const formulaInspector = require('./formula-inspector.cjs')
+const rangeReader = require('./range-reader.cjs')
 
 const LIVE_SOURCE = 'live-coedit-editor'
 
 function validateFormulaMatrix(range, formulas, maxCells = 26000) {
-  const parsed = parseA1Range(range)
+  const parsed = rangeReader.parseA1Range(range)
   if (!parsed) return { ok:false, outcome:'invalid-range', error:'range must be a rectangular A1 address such as A1:H50' }
   if (!Array.isArray(formulas) || !formulas.length || !Array.isArray(formulas[0]) || !formulas[0].length) return { ok:false, outcome:'invalid-formulas', error:'formulas must be a non-empty 2D array' }
   const cols = formulas[0].length
@@ -62,14 +61,24 @@ async function writeFormulaInFrame(frame, apiHely, {sheet,range,formulas,maxCell
   }),{u:apiHely,timeout:callbackTimeoutMs,commandBody:body})
 }
 
-function verifyFormulaMatrix(inspected, formulas) {
-  if(!inspected || !inspected.ok || !Array.isArray(inspected.cells)) return {ok:false,outcome:'verification-unavailable',error:'formula read-back did not return a verifiable cell matrix'}
+function verifyFormulaMatrix(readBack, formulas) {
+  if(!readBack || !readBack.ok || !Array.isArray(readBack.cells)) return {ok:false,outcome:'verification-unavailable',error:'live range read-back did not return a verifiable cell matrix'}
+  if(readBack.source !== LIVE_SOURCE) return {ok:false,outcome:'verification-unavailable',error:'verification source is not the live co-edit editor'}
   const mismatches=[]
   for(let r=0;r<formulas.length;r++)for(let c=0;c<formulas[r].length;c++){
-    const cell=inspected.cells[r]&&inspected.cells[r][c]
-    if(!cell || cell.formulaStatus!=='formula' || cell.formula!==formulas[r][c]) mismatches.push({row:r+1,column:c+1,expected:formulas[r][c],actual:cell?cell.formula:null,status:cell?cell.formulaStatus:null})
+    const cell=readBack.cells[r]&&readBack.cells[r][c]
+    const actual=cell&&typeof cell.formula==='string'?cell.formula:null
+    const status=cell?(cell.formulaStatus || cell.dataType || null):null
+    const provenFormula=cell && (cell.formulaStatus ? cell.formulaStatus==='formula' : cell.dataType==='formula')
+    if(!provenFormula || actual!==formulas[r][c]) mismatches.push({row:r+1,column:c+1,expected:formulas[r][c],actual,status})
   }
   return mismatches.length?{ok:false,outcome:'verification-mismatch',mismatches}:{ok:true,outcome:'verified'}
+}
+
+async function verifyFormulaRangeInFrame(frame, apiHely, {sheet,range,formulas,maxCells=26000,callbackTimeoutMs=15000}) {
+  const readBack=await rangeReader.readRangeInFrame(frame,apiHely,{sheet,range,maxCells,callbackTimeoutMs})
+  const verification=verifyFormulaMatrix(readBack,formulas)
+  return {readBack,verification}
 }
 
 async function writeFormulaLive({url,user,pass,fileId,sheet,range,formulas,loadPlaywright,timeoutMs=60000,callbackTimeoutMs=15000,maxCells=26000}) {
@@ -86,10 +95,9 @@ async function writeFormulaLive({url,user,pass,fileId,sheet,range,formulas,loadP
     const apiHely=await frame.evaluate(()=>{if((window.Asc||{}).editor&&typeof window.Asc.editor.callCommand==='function')return 'window.Asc.editor'; if(window.editor&&typeof window.editor.callCommand==='function')return 'window.editor'; return null})
     if(!apiHely)return {ok:false,outcome:'nincs-api',source:LIVE_SOURCE,error:'callCommand is unavailable on known editor objects'}
     const write=await writeFormulaInFrame(frame,apiHely,{sheet,range,formulas,maxCells,callbackTimeoutMs}); if(!write.ok)return {...write,editor:'spreadsheeteditor',apiHely}
-    const inspected=await formulaInspector.inspectFormulaInFrame(frame,apiHely,{sheet,range,maxCells,callbackTimeoutMs})
-    const verification=verifyFormulaMatrix(inspected,formulas)
-    return {...write,verified:verification.ok,verification,readBack:inspected,editor:'spreadsheeteditor',apiHely}
+    const {readBack,verification}=await verifyFormulaRangeInFrame(frame,apiHely,{sheet,range,formulas,maxCells,callbackTimeoutMs})
+    return {...write,verified:verification.ok,verification,readBack,editor:'spreadsheeteditor',apiHely}
   } finally { await browser.close().catch(()=>{}) }
 }
 
-module.exports={validateFormulaMatrix,formulaWriterCommand,writeFormulaInFrame,verifyFormulaMatrix,writeFormulaLive}
+module.exports={validateFormulaMatrix,formulaWriterCommand,writeFormulaInFrame,verifyFormulaMatrix,verifyFormulaRangeInFrame,writeFormulaLive}
