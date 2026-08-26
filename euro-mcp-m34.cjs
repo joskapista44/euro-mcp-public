@@ -10,7 +10,7 @@ function textResult(payload){return {content:[{type:'text',text:JSON.stringify(p
 
 server.tool(
   'office_write_cross_sheet_formulas',
-  'Writes sheet-qualified formulas through the live ONLYOFFICE spreadsheeteditor/callCommand path, validates every referenced worksheet, and verifies formula text by same-session live read-back. Supports quoted sheet names, cross-sheet ranges, and relative/absolute/mixed A1 references. No DocBuilder, OOXML, ZIP/XML or downloaded-XLSX fallback.',
+  'Writes sheet-qualified formulas through the live ONLYOFFICE spreadsheeteditor/callCommand path, validates every referenced worksheet, and verifies formula text by same-session live read-back. Supports quoted sheet names, cross-sheet ranges, and relative/absolute/mixed A1 references. No offline or downloaded-package edit fallback.',
   {file_id:z.string(),sheet:z.string().min(1),range:z.string().min(1),formulas:z.array(z.array(z.string().min(1))).min(1)},
   async ({file_id,sheet,range,formulas})=>{
     const hivo=coedit.detectCallerId(); if(!hivo.ok)return textResult({ok:false,outcome:'azonossag-hiany',error:hivo.indok})
