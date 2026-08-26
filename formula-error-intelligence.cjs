@@ -23,17 +23,41 @@ function normalizeErrorToken(value) {
   return Object.prototype.hasOwnProperty.call(ERROR_TYPES, token) ? token : null
 }
 
+function errorLikeToken(value) {
+  if (typeof value !== 'string') return null
+  const token = value.trim().toUpperCase()
+  if (!token || token.charAt(0) !== '#') return null
+  return /^#[A-Z0-9_./]+[!?]?$/.test(token) ? token : null
+}
+
 function unsupportedField(inspected, name) {
   return Array.isArray(inspected && inspected.unsupported) && inspected.unsupported.some((x) => x && x.field === name)
 }
 
 function classifyFormulaError(cell, inspected) {
-  if (!cell || cell.formulaStatus !== 'formula') {
+  if (!cell) {
+    return {errorStatus:'unknown',errorType:null,errorToken:null,evidence:null,reason:'cell evidence is missing'}
+  }
+  if (cell.formulaStatus === 'constant') {
     return { errorStatus:'not-formula', errorType:null, errorToken:null, evidence:null }
   }
+  if (cell.formulaStatus !== 'formula') {
+    return {errorStatus:'unknown',errorType:null,errorToken:null,evidence:null,reason:'formula status is not proven'}
+  }
 
-  const valueToken = normalizeErrorToken(cell.calculatedValue)
-  const textToken = normalizeErrorToken(cell.displayText)
+  const valueUnavailable = unsupportedField(inspected, 'GetValue')
+  const textUnavailable = unsupportedField(inspected, 'GetText')
+  const valueToken = valueUnavailable ? null : normalizeErrorToken(cell.calculatedValue)
+  const textToken = textUnavailable ? null : normalizeErrorToken(cell.displayText)
+
+  if (valueToken && textToken && valueToken !== textToken) {
+    return {
+      errorStatus:'unknown',errorType:null,errorToken:null,
+      evidence:{sources:['GetValue','GetText'],calculatedValue:cell.calculatedValue,displayText:cell.displayText},
+      reason:'live getters returned conflicting recognized formula error tokens'
+    }
+  }
+
   const token = textToken || valueToken
   if (token) {
     const sources = []
@@ -47,13 +71,29 @@ function classifyFormulaError(cell, inspected) {
     }
   }
 
-  const valueUnavailable = unsupportedField(inspected, 'GetValue')
-  const textUnavailable = unsupportedField(inspected, 'GetText')
-  if (valueUnavailable && textUnavailable) {
-    return {errorStatus:'unknown',errorType:null,errorToken:null,evidence:null,reason:'GetValue and GetText are unavailable; formula error status cannot be proven'}
+  const valueCandidate = valueUnavailable ? null : errorLikeToken(cell.calculatedValue)
+  const textCandidate = textUnavailable ? null : errorLikeToken(cell.displayText)
+  const unknownCandidate = textCandidate || valueCandidate
+  if (unknownCandidate) {
+    const sources = []
+    if (valueCandidate) sources.push('GetValue')
+    if (textCandidate) sources.push('GetText')
+    return {
+      errorStatus:'unknown',errorType:null,errorToken:unknownCandidate,
+      evidence:{sources,calculatedValue:cell.calculatedValue,displayText:cell.displayText},
+      reason:'live API returned an error-looking token that M3.5 does not recognize'
+    }
   }
 
-  return { errorStatus:'ok', errorType:null, errorToken:null, evidence:null }
+  if (valueUnavailable || textUnavailable) {
+    const missing = [valueUnavailable ? 'GetValue' : null, textUnavailable ? 'GetText' : null].filter(Boolean)
+    return {
+      errorStatus:'unknown',errorType:null,errorToken:null,evidence:null,
+      reason:missing.join(' and ') + ' unavailable; non-error status cannot be proven from incomplete live evidence'
+    }
+  }
+
+  return { errorStatus:'ok', errorType:null, errorToken:null, evidence:{sources:['GetValue','GetText'],calculatedValue:cell.calculatedValue,displayText:cell.displayText} }
 }
 
 function diagnoseInspection(inspected) {
@@ -72,19 +112,19 @@ function diagnoseInspection(inspected) {
     for (const cell of sourceRow) {
       const diagnosis = classifyFormulaError(cell, inspected)
       const item = {
-        address:cell.address,
-        row:cell.row,
-        column:cell.column,
-        formulaStatus:cell.formulaStatus,
-        formula:cell.formula,
-        calculatedValue:cell.calculatedValue,
-        displayText:cell.displayText,
-        cellType:cell.cellType,
+        address:cell && cell.address,
+        row:cell && cell.row,
+        column:cell && cell.column,
+        formulaStatus:cell && cell.formulaStatus,
+        formula:cell && cell.formula,
+        calculatedValue:cell && cell.calculatedValue,
+        displayText:cell && cell.displayText,
+        cellType:cell && cell.cellType,
         ...diagnosis
       }
       row.push(item)
       summary.cells += 1
-      if (cell.formulaStatus === 'formula') summary.formulas += 1
+      if (cell && cell.formulaStatus === 'formula') summary.formulas += 1
       if (diagnosis.errorStatus === 'error') {
         summary.formulaErrors += 1
         summary.byType[diagnosis.errorType] = (summary.byType[diagnosis.errorType] || 0) + 1
@@ -151,4 +191,4 @@ async function diagnoseFormulaErrorsLive({url,user,pass,fileId,sheet,range,loadP
   } finally { await browser.close().catch(()=>{}) }
 }
 
-module.exports={ERROR_TYPES,normalizeErrorToken,classifyFormulaError,diagnoseInspection,diagnoseFormulaErrorsInFrame,diagnoseFormulaErrorsLive}
+module.exports={ERROR_TYPES,normalizeErrorToken,errorLikeToken,classifyFormulaError,diagnoseInspection,diagnoseFormulaErrorsInFrame,diagnoseFormulaErrorsLive}
