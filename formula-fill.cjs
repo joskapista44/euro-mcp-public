@@ -1,7 +1,6 @@
 'use strict'
 
-const { parseA1Range } = require('./range-reader.cjs')
-const formulaInspector = require('./formula-inspector.cjs')
+const rangeReader = require('./range-reader.cjs')
 const formulaWriter = require('./formula-writer.cjs')
 
 const LIVE_SOURCE='live-coedit-editor'
@@ -37,7 +36,7 @@ function translateFormulaA1(formula,rowDelta,columnDelta){
 }
 
 function buildFillMatrix(sourceCell,targetRange,sourceFormula,maxCells=26000){
-  const src=parseCell(sourceCell), target=parseA1Range(targetRange)
+  const src=parseCell(sourceCell), target=rangeReader.parseA1Range(targetRange)
   if(!src)return {ok:false,outcome:'invalid-source-cell',error:'source_cell must be one A1 cell'}
   if(!target)return {ok:false,outcome:'invalid-range',error:'target_range must be rectangular A1'}
   if(target.cellCount>maxCells)return {ok:false,outcome:'range-too-large',cellCount:target.cellCount,maxCells,error:'target range exceeds configured cell limit'}
@@ -58,14 +57,13 @@ function buildFillMatrix(sourceCell,targetRange,sourceFormula,maxCells=26000){
 
 async function fillFormulaInFrame(frame,apiHely,{sheet,sourceCell,targetRange,maxCells=26000,callbackTimeoutMs=15000}){
   const src=parseCell(sourceCell); if(!src)return {ok:false,outcome:'invalid-source-cell',source:LIVE_SOURCE,error:'source_cell must be one A1 cell'}
-  const inspected=await formulaInspector.inspectFormulaInFrame(frame,apiHely,{sheet,range:src.address,maxCells:1,callbackTimeoutMs})
+  const inspected=await rangeReader.readRangeInFrame(frame,apiHely,{sheet,range:src.address,maxCells:1,callbackTimeoutMs})
   const cell=inspected&&inspected.ok&&inspected.cells&&inspected.cells[0]&&inspected.cells[0][0]
-  if(!cell||cell.formulaStatus!=='formula'||typeof cell.formula!=='string')return {ok:false,outcome:'source-not-formula',source:LIVE_SOURCE,sheet,sourceCell:src.address,error:'source cell does not expose a formula through live inspector'}
+  if(!cell||cell.dataType!=='formula'||typeof cell.formula!=='string')return {ok:false,outcome:'source-not-formula',source:LIVE_SOURCE,sheet,sourceCell:src.address,error:'source cell does not expose a formula through live range reader'}
   const plan=buildFillMatrix(src.address,targetRange,cell.formula,maxCells); if(!plan.ok)return {...plan,source:LIVE_SOURCE,sheet,sourceCell:src.address,targetRange}
   const write=await formulaWriter.writeFormulaInFrame(frame,apiHely,{sheet,range:plan.target.address,formulas:plan.formulas,maxCells,callbackTimeoutMs})
   if(!write.ok)return {...write,sourceCell:src.address,direction:plan.direction}
-  const readBack=await formulaInspector.inspectFormulaInFrame(frame,apiHely,{sheet,range:plan.target.address,maxCells,callbackTimeoutMs})
-  const verification=formulaWriter.verifyFormulaMatrix(readBack,plan.formulas)
+  const {readBack,verification}=await formulaWriter.verifyFormulaRangeInFrame(frame,apiHely,{sheet,range:plan.target.address,formulas:plan.formulas,maxCells,callbackTimeoutMs})
   return {...write,sourceCell:src.address,direction:plan.direction,expectedFormulas:plan.formulas,verified:verification.ok,verification,readBack}
 }
 

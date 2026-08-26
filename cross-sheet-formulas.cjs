@@ -1,7 +1,6 @@
 'use strict'
 
 const formulaWriter = require('./formula-writer.cjs')
-const formulaInspector = require('./formula-inspector.cjs')
 
 const LIVE_SOURCE = 'live-coedit-editor'
 
@@ -40,7 +39,7 @@ function scanSheetReferences(formula) {
       if(j>=formula.length || formula[j+1]!=='!') return {ok:false,outcome:'invalid-sheet-reference',error:'quoted sheet name is not correctly terminated before !'}
       refs.push({sheet:name,quoted:true,start:i,end:j+2}); i=j+2; continue
     }
-    const m=formula.slice(i).match(/^([A-Za-z_][A-Za-z0-9_.]*)!/) 
+    const m=formula.slice(i).match(/^([A-Za-z_][A-Za-z0-9_.]*)!/)
     if(m){refs.push({sheet:m[1],quoted:false,start:i,end:i+m[0].length});i+=m[0].length;continue}
     i++
   }
@@ -79,8 +78,7 @@ async function writeCrossSheetInFrame(frame,apiHely,{sheet,range,formulas,maxCel
   const writerValid=formulaWriter.validateFormulaMatrix(range,formulas,maxCells); if(!writerValid.ok)return {...writerValid,source:LIVE_SOURCE,sheet,range}
   const preflight=await preflightReferencedSheets(frame,apiHely,cross.sheets,callbackTimeoutMs); if(!preflight.ok)return {...preflight,targetSheet:sheet,range}
   const write=await formulaWriter.writeFormulaInFrame(frame,apiHely,{sheet,range,formulas,maxCells,callbackTimeoutMs}); if(!write.ok)return {...write,referencedSheets:cross.sheets}
-  const readBack=await formulaInspector.inspectFormulaInFrame(frame,apiHely,{sheet,range,maxCells,callbackTimeoutMs})
-  const verification=formulaWriter.verifyFormulaMatrix(readBack,formulas)
+  const {readBack,verification}=await formulaWriter.verifyFormulaRangeInFrame(frame,apiHely,{sheet,range,formulas,maxCells,callbackTimeoutMs})
   return {...write,referencedSheets:cross.sheets,validatedSheets:preflight.validatedSheets,verified:verification.ok,verification,readBack}
 }
 
