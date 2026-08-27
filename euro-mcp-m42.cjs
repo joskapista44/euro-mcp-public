@@ -2,7 +2,7 @@
 
 const { StdioServerTransport } = require('@modelcontextprotocol/sdk/server/stdio.js')
 const { z } = require('zod')
-const { server } = require('./euro-mcp-m2.cjs')
+const { server } = require('./euro-mcp-m36.cjs')
 const coedit = require('./coedit.cjs')
 const nf = require('./number-format-intelligence.cjs')
 
