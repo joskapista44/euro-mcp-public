@@ -33,6 +33,32 @@ function formattingCommand(sheetName, rangeAddress, spec) {
   function has(o, n) { return !!o && typeof o[n] === 'function' }
   function fail(outcome, error, extra) { var x = { ok:false, outcome:outcome, source:'live-coedit-editor', error:error }; if (extra) for (var k in extra) x[k]=extra[k]; return x }
   function color(rgb) { return rgb == null ? null : Api.CreateColorFromRGB(rgb[0], rgb[1], rgb[2]) }
+  function packedRgb(rgb) { return rgb == null ? null : ((rgb[0] << 16) | (rgb[1] << 8) | rgb[2]) >>> 0 }
+  function colorValue(v) {
+    if (v == null || v === 'No Fill') return v
+    try {
+      if (has(v,'GetRGB')) return v.GetRGB()
+      if (has(v,'GetHex')) return v.GetHex()
+    } catch (_) {}
+    return null
+  }
+  function readProp(range, prop, getter) {
+    try {
+      if (getter && has(range,getter)) return { measurable:true, value:range[getter]() }
+      var v = range[prop]
+      if (v !== undefined) return { measurable:true, value:v }
+    } catch (_) {}
+    return { measurable:false, value:null }
+  }
+  function equalValue(key, expected, actual) {
+    if (key === 'fontColor' || key === 'fillColor') {
+      var normalized = colorValue(actual)
+      if (typeof normalized === 'number') return normalized === packedRgb(expected)
+      if (typeof normalized === 'string' && /^#?[0-9a-f]{6}$/i.test(normalized)) return normalized.replace('#','').toLowerCase() === expected.map(function(n){return n.toString(16).padStart(2,'0')}).join('').toLowerCase()
+      return false
+    }
+    return actual === expected
+  }
   try {
     if (!has(Api, 'GetSheet')) return fail('unsupported', 'Api.GetSheet is unavailable')
     var sheet = null; try { sheet = Api.GetSheet(sheetName) } catch (_) {}
@@ -60,10 +86,24 @@ function formattingCommand(sheetName, rangeAddress, spec) {
       var br = range.SetBorders(spec.border.index, spec.border.style, color(spec.border.color)); if (br === false) return fail('format-error','ApiRange.SetBorders returned false',{ capability:'border' })
       applied.push('border')
     }
-    var verified = {}
-    if (spec.numberFormat !== undefined && has(range,'GetNumberFormat')) verified.numberFormat = range.GetNumberFormat()
-    if (spec.wrap !== undefined && has(range,'GetWrapText')) verified.wrap = range.GetWrapText()
-    return { ok:true, outcome:'ok', source:'live-coedit-editor', sheet:sheetName, range:String(rangeAddress).toUpperCase(), applied:applied, verified:verified }
+
+    var readers = {
+      bold:['Bold',null], italic:['Italic',null], fontName:['FontName',null], fontSize:['FontSize',null],
+      fontColor:['FontColor',null], fillColor:['FillColor','GetFillColor'], alignHorizontal:['AlignHorizontal',null],
+      alignVertical:['AlignVertical',null], wrap:['WrapText','GetWrapText'], numberFormat:['NumberFormat','GetNumberFormat']
+    }
+    var checks = {}; var mismatches = []; var unknown = []
+    for (var i=0;i<applied.length;i++) {
+      var key=applied[i]
+      if (key === 'border') { checks[key]={status:'unknown',expected:spec.border,actual:null,reason:'ApiRange exposes SetBorders but no live border getter'}; unknown.push(key); continue }
+      var rd=readers[key]; var got=readProp(range,rd[0],rd[1])
+      if (!got.measurable) { checks[key]={status:'unknown',expected:spec[key],actual:null,reason:'live getter/property unavailable'}; unknown.push(key); continue }
+      var match=equalValue(key,spec[key],got.value)
+      checks[key]={status:match?'pass':'fail',expected:spec[key],actual:(key==='fontColor'||key==='fillColor')?colorValue(got.value):got.value}
+      if(!match)mismatches.push(key)
+    }
+    var verificationOutcome=mismatches.length?'fail':unknown.length?'unknown':'pass'
+    return { ok:mismatches.length===0, outcome:mismatches.length?'verification-mismatch':'ok', source:'live-coedit-editor', sheet:sheetName, range:String(rangeAddress).toUpperCase(), applied:applied, verification:{outcome:verificationOutcome,checks:checks,mismatches:mismatches,unknown:unknown} }
   } catch (err) {
     if (err && err.unsupported) return fail('unsupported',err.message,{ capability:err.capability })
     return fail('format-error',String(err && err.message ? err.message : err),{ capability:err && err.capability ? err.capability : null })
