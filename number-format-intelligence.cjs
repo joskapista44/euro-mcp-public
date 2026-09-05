@@ -63,7 +63,7 @@ async function callCommandInFrame(frame, apiHely, command, args, callbackTimeout
     const editor=u==='window.editor'?window.editor:(window.Asc||{}).editor
     if(!editor || typeof editor.callCommand!=='function')return resolve({ok:false,outcome:'nincs-api',source:'live-coedit-editor',error:'callCommand is unavailable'})
     let done=false; const finish=(v)=>{if(!done){done=true;resolve(v)}}
-    try{ editor.callCommand(new Function(commandBody),false,false,(v)=>finish(v===undefined?{ok:false,outcome:'empty-callback',source:'live-coedit-editor',error:'callCommand callback returned undefined'}:v)) }
+    try{ editor.callCommand(new Function(commandBody),false,(v)=>finish(v===undefined?{ok:false,outcome:'empty-callback',source:'live-coedit-editor',error:'callCommand callback returned undefined'}:v)) }
     catch(err){ finish({ok:false,outcome:'callcommand-error',source:'live-coedit-editor',error:String(err&&err.message?err.message:err)}) }
     setTimeout(()=>finish({ok:false,outcome:'callback-timeout',source:'live-coedit-editor',error:'number-format callCommand callback timed out'}),timeout)
   }),{u:apiHely,commandBody:body,timeout:callbackTimeoutMs})

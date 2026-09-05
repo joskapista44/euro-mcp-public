@@ -164,7 +164,7 @@ async function inspectWorkbookInFrame(frame, apiHely, timeoutMs = 10000) {
     try {
       const command = new Function(commandBody)
       // Deployed plugin SDK shape: function, isClose, isCalc, callback.
-      editor.callCommand(command, false, false, (value) => finish(value === undefined ? { ok: false, outcome: 'ures-callback', error: 'callCommand callback undefined eredmenyt adott' } : value))
+      editor.callCommand(command, false, (value) => finish(value === undefined ? { ok: false, outcome: 'ures-callback', error: 'callCommand callback undefined eredmenyt adott' } : value))
     } catch (err) {
       finish({ ok: false, outcome: 'callcommand-dobott', error: String(err && err.message ? err.message : err) })
     }

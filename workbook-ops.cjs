@@ -128,7 +128,7 @@ async function runOperationInFrame(frame, apiHely, operation, timeoutMs = 15000)
     let settled = false
     const finish = (v) => { if (!settled) { settled = true; resolve(v) } }
     try {
-      editor.callCommand(new Function(commandBody), false, false, (value) => finish(value === undefined ? { ok: false, outcome: 'ures-callback', source: 'live-coedit-editor', error: 'callCommand returned undefined' } : value))
+      editor.callCommand(new Function(commandBody), false, (value) => finish(value === undefined ? { ok: false, outcome: 'ures-callback', source: 'live-coedit-editor', error: 'callCommand returned undefined' } : value))
     } catch (err) { finish({ ok: false, outcome: 'callcommand-dobott', source: 'live-coedit-editor', error: String(err && err.message ? err.message : err) }) }
     setTimeout(() => finish({ ok: false, outcome: 'callback-timeout', source: 'live-coedit-editor', error: 'workbook operation callback timed out' }), timeout)
   }), { u: apiHely, timeout: timeoutMs, commandBody: body })

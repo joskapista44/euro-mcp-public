@@ -126,8 +126,30 @@ async function runM43AcceptanceInFrame(frame, apiHely, options = {}) {
   await layout('column-show', { type: 'columns.hidden', sheet, range: column, hidden: false })
   await layout('row-hide', { type: 'rows.hidden', sheet, range: row, hidden: true })
   await layout('row-show', { type: 'rows.hidden', sheet, range: row, hidden: false })
-  await layout('autofit-column', { type: 'autofit.columns', sheet, range: autofitColumn })
-  await layout('autofit-row', { type: 'autofit.rows', sheet, range: autofitRow })
+  // Deterministic AutoFit acceptance: force dimensions away from best-fit first.
+  await layout('autofit-column-fixture', {
+    type: 'column.width',
+    sheet,
+    range: autofitColumn,
+    width: 30
+  })
+  await layout('autofit-column', {
+    type: 'autofit.columns',
+    sheet,
+    range: autofitColumn
+  })
+
+  await layout('autofit-row-fixture', {
+    type: 'row.height',
+    sheet,
+    range: autofitRow,
+    height: 40
+  })
+  await layout('autofit-row', {
+    type: 'autofit.rows',
+    sheet,
+    range: autofitRow
+  })
 
   // Preserve the disposable target cell, seed a unique marker, and prove the seed through M1.2.
   const originalRead = await read(structuralCell)

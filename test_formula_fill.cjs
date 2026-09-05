@@ -23,7 +23,7 @@ global.Api={GetSheet:(name)=>name==='Second'?{GetRange:(addr)=>({
   GetText:()=>addr.includes(':')?[['1'],['2'],['3']]:'1',
   SetFormula:(f)=>{cells[addr]=f}
 })}:null}
-const frame={evaluate:async(fn,args)=>{global.window={Asc:{editor:{callCommand:(cmd,a,b,cb)=>cb(cmd())}}}; return fn(args)}}
+const frame={evaluate:async(fn,args)=>{global.window={Asc:{editor:{callCommand:(cmd,a,cb)=>cb(cmd())}}}; return fn(args)}}
 ;(async()=>{
   const r=await ff.fillFormulaInFrame(frame,'window.Asc.editor',{sheet:'Second',sourceCell:'B2',targetRange:'B2:B4',callbackTimeoutMs:50})
   eq(r.ok,true); eq(r.verified,true); eq(r.direction,'vertical'); eq(cells.B3,'=A3+$A$1'); eq(cells.B4,'=A4+$A$1')

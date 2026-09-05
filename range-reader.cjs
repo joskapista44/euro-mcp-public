@@ -180,7 +180,7 @@ async function readRangeInFrame(frame, apiHely, { sheet, range, maxCells = 26000
     const finish = (value) => { if (!settled) { settled = true; resolve(value) } }
     try {
       const command = new Function(commandBody)
-      editor.callCommand(command, false, false, (value) => finish(value === undefined ? { ok: false, outcome: 'empty-callback', source: 'live-coedit-editor', error: 'callCommand callback returned undefined' } : value))
+      editor.callCommand(command, false, (value) => finish(value === undefined ? { ok: false, outcome: 'empty-callback', source: 'live-coedit-editor', error: 'callCommand callback returned undefined' } : value))
     } catch (err) {
       finish({ ok: false, outcome: 'callcommand-error', source: 'live-coedit-editor', error: String(err && err.message ? err.message : err) })
     }

@@ -117,7 +117,7 @@ async function writeBulkInFrame(frame, apiHely, { sheet, range, values, formulas
     const finish = (value) => { if (!settled) { settled = true; resolve(value) } }
     try {
       const command = new Function(commandBody)
-      editor.callCommand(command, false, false, (value) => finish(value === undefined ? { ok: false, outcome: 'empty-callback', source: 'live-coedit-editor', error: 'callCommand callback returned undefined' } : value))
+      editor.callCommand(command, false, (value) => finish(value === undefined ? { ok: false, outcome: 'empty-callback', source: 'live-coedit-editor', error: 'callCommand callback returned undefined' } : value))
     } catch (err) { finish({ ok: false, outcome: 'callcommand-error', source: 'live-coedit-editor', error: String(err && err.message ? err.message : err) }) }
     setTimeout(() => finish({ ok: false, outcome: 'callback-timeout', source: 'live-coedit-editor', error: 'bulk writer callCommand callback did not arrive in time' }), timeout)
   }), { u: apiHely, timeout: callbackTimeoutMs, commandBody: body })

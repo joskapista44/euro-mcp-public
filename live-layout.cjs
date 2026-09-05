@@ -90,9 +90,13 @@ function layoutCommand(spec) {
 
     if (spec.type === 'autofit.columns' || spec.type === 'autofit.rows') {
       const isColumns = spec.type === 'autofit.columns'
-      const getterName = isColumns ? 'GetEntireColumn' : 'GetEntireRow'
       const measureName = isColumns ? 'GetColumnWidth' : 'GetRowHeight'
-      const target = has(range, getterName) ? range[getterName]() : range
+
+      // AutoFit is deliberately invoked on the range returned directly by
+      // ApiWorksheet.GetRange().  In the live editor the derived
+      // GetEntireColumn/GetEntireRow object may expose AutoFit without
+      // applying the mutation.
+      const target = range
       if (!target || !has(target, 'AutoFit')) return unknown(spec.type, 'ApiRange.AutoFit is unavailable')
       const canRead = has(target, measureName)
       const before = canRead ? target[measureName]() : null
@@ -127,7 +131,7 @@ async function runLayoutInFrame(frame, apiHely, spec, timeoutMs = 15000) {
     let settled = false
     const finish = (v) => { if (!settled) { settled = true; resolve(v) } }
     try {
-      editor.callCommand(new Function(commandBody), false, false, (value) => finish(value === undefined
+      editor.callCommand(new Function(commandBody), false, (value) => finish(value === undefined
         ? { ok: false, outcome: 'ures-callback', source: 'live-coedit-editor', error: 'callCommand returned undefined' }
         : value))
     } catch (err) {

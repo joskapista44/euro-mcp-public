@@ -22,7 +22,7 @@ global.Api={GetSheet:(name)=>{
   if(name==='Source Data')return {GetRange:()=>({})}
   return null
 }}
-const frame={evaluate:async(fn,args)=>{global.window={Asc:{editor:{callCommand:(cmd,a,b,cb)=>cb(cmd())}}};return fn(args)}}
+const frame={evaluate:async(fn,args)=>{global.window={Asc:{editor:{callCommand:(cmd,a,cb)=>cb(cmd())}}};return fn(args)}}
 
 ;(async()=>{
   let p=await xs.preflightReferencedSheets(frame,'window.Asc.editor',['Source Data']); eq(p.ok,true)

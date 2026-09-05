@@ -113,7 +113,7 @@ async function inspectFormulaInFrame(frame, apiHely, { sheet, range, maxCells = 
     let settled = false
     const finish = (v) => { if (!settled) { settled = true; resolve(v) } }
     try {
-      editor.callCommand(new Function(commandBody), false, false, (value) => finish(value === undefined ? {ok:false,outcome:'empty-callback',source:'live-coedit-editor',error:'callCommand callback returned undefined'} : value))
+      editor.callCommand(new Function(commandBody), false, (value) => finish(value === undefined ? {ok:false,outcome:'empty-callback',source:'live-coedit-editor',error:'callCommand callback returned undefined'} : value))
     } catch (err) { finish({ok:false,outcome:'callcommand-error',source:'live-coedit-editor',error:String(err && err.message ? err.message : err)}) }
     setTimeout(() => finish({ok:false,outcome:'callback-timeout',source:'live-coedit-editor',error:'formula inspector callCommand callback did not arrive in time'}), timeout)
   }), { u:apiHely, timeout:callbackTimeoutMs, commandBody:body })

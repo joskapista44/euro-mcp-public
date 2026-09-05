@@ -56,7 +56,7 @@ async function writeFormulaInFrame(frame, apiHely, {sheet,range,formulas,maxCell
     const editor=u==='window.editor'?window.editor:(window.Asc||{}).editor
     if(!editor||typeof editor.callCommand!=='function')return resolve({ok:false,outcome:'nincs-api',source:'live-coedit-editor',error:'callCommand is unavailable on the editor object'})
     let settled=false; const finish=(v)=>{if(!settled){settled=true;resolve(v)}}
-    try{editor.callCommand(new Function(commandBody),false,false,(value)=>finish(value===undefined?{ok:false,outcome:'empty-callback',source:'live-coedit-editor',error:'callCommand callback returned undefined'}:value))}catch(err){finish({ok:false,outcome:'callcommand-error',source:'live-coedit-editor',error:String(err&&err.message?err.message:err)})}
+    try{editor.callCommand(new Function(commandBody),false,(value)=>finish(value===undefined?{ok:false,outcome:'empty-callback',source:'live-coedit-editor',error:'callCommand callback returned undefined'}:value))}catch(err){finish({ok:false,outcome:'callcommand-error',source:'live-coedit-editor',error:String(err&&err.message?err.message:err)})}
     setTimeout(()=>finish({ok:false,outcome:'callback-timeout',source:'live-coedit-editor',error:'formula writer callCommand callback did not arrive in time'}),timeout)
   }),{u:apiHely,timeout:callbackTimeoutMs,commandBody:body})
 }
