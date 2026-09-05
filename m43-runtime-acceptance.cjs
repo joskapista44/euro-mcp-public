@@ -3,7 +3,7 @@
 // M4.3 combined runtime acceptance probe.
 // Runs the complete acceptance sequence in ONE already-open ONLYOFFICE editor
 // session, so the human observer can confirm that the same live document changes
-// without reload. No WebDAV/saved-XLSX/OOXML evidence is used.
+// without reload. No saved-file fallback evidence is used.
 
 const { runLayoutInFrame } = require('./live-layout.cjs')
 const { runOperationInFrame } = require('./workbook-ops.cjs')
