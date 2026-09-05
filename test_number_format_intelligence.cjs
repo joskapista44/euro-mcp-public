@@ -41,6 +41,6 @@ assert.match(entry,/office_number_format/)
 assert.match(entry,/require\('\.\/euro-mcp-m36\.cjs'\)/)
 assert.doesNotMatch(entry,/require\('\.\/euro-mcp-m2\.cjs'\)/)
 const pkg=JSON.parse(fs.readFileSync('package.json','utf8'))
-assert.equal(pkg.main,'euro-mcp-m42.cjs')
+// M4.2 remains part of the regression chain even when a newer milestone owns package.main.
 assert.match(pkg.scripts['test:js'],/test_number_format_intelligence\.cjs/)
 console.log('test_number_format_intelligence: OK')
