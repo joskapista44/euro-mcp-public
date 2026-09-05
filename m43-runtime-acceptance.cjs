@@ -38,6 +38,27 @@ function markerVerification(read, expectedAddress, marker) {
   }
 }
 
+function originalContentVerification(read, expectedAddress, original) {
+  const cell = firstCell(read)
+  if (!cell || cell.address !== expectedAddress || !original) {
+    return { status: 'FAIL', expected: { address: expectedAddress, original }, actual: cell || null }
+  }
+
+  let pass
+  let expected
+  let actual
+  if (original.formula) {
+    expected = { address: expectedAddress, formula: original.formula }
+    actual = { address: cell.address, formula: cell.formula }
+    pass = cell.formula === original.formula
+  } else {
+    expected = { address: expectedAddress, rawValue: original.rawValue }
+    actual = { address: cell.address, rawValue: cell.rawValue, value: cell.value, displayText: cell.displayText }
+    pass = cell.rawValue === original.rawValue
+  }
+  return { status: pass ? 'PASS' : 'FAIL', expected, actual }
+}
+
 async function runM43AcceptanceInFrame(frame, apiHely, options = {}) {
   const sheet = options.sheet || 'Sheet1'
   const column = options.column || 'H:H'
@@ -69,12 +90,33 @@ async function runM43AcceptanceInFrame(frame, apiHely, options = {}) {
       steps.push({ name, status: 'FAIL', result, verification: { status: 'FAIL', reason: 'live structural mutation failed' } })
       return false
     }
+    steps.push({ name, status: 'PASS', result, verification: { status: 'PASS', reason: 'live structural mutation dispatched successfully; postcondition is verified by the following M1.2 read-back step' } })
     return true
   }
   async function verifyMarker(name, address) {
     const observation = await read(address)
     const verification = markerVerification(observation, address, marker)
     steps.push({ name, status: verification.status, observation, verification })
+    return verification.status === 'PASS'
+  }
+  async function restoreOriginal(original) {
+    const restoreFormula = original.formula || null
+    const restoreValue = restoreFormula ? null : original.rawValue
+    const restored = await writeBulkInFrame(frame, apiHely, {
+      sheet,
+      range: structuralCell,
+      values: [[restoreValue]],
+      formulas: restoreFormula ? [[restoreFormula]] : null,
+      callbackTimeoutMs: timeoutMs,
+    })
+    if (!restored || !restored.ok) {
+      steps.push({ name: 'marker-restore-write', status: 'FAIL', result: restored, verification: { status: 'FAIL', reason: 'failed to restore original structural marker cell content' } })
+      return false
+    }
+    steps.push({ name: 'marker-restore-write', status: 'PASS', result: restored, verification: { status: 'PASS', reason: 'restore write dispatched; M1.2 read-back follows' } })
+    const observation = await read(structuralCell)
+    const verification = originalContentVerification(observation, structuralCell, original)
+    steps.push({ name: 'marker-restore-readback', status: verification.status, observation, verification })
     return verification.status === 'PASS'
   }
 
@@ -98,30 +140,48 @@ async function runM43AcceptanceInFrame(frame, apiHely, options = {}) {
     if (!seed || !seed.ok) {
       steps.push({ name: 'marker-seed', status: 'FAIL', result: seed, verification: { status: 'FAIL', reason: 'live marker write failed' } })
     } else {
-      await verifyMarker('marker-seed-readback', structuralCell)
+      steps.push({ name: 'marker-seed', status: 'PASS', result: seed, verification: { status: 'PASS', reason: 'marker write dispatched; M1.2 read-back follows' } })
+      const seedVerified = await verifyMarker('marker-seed-readback', structuralCell)
+      let shapeSafe = true
 
-      if (await mutate('row-insert-dispatch', { type: 'rows.insert', sheet, range: structuralRow })) {
-        await verifyMarker('row-insert', rowMovedCell)
-        if (await mutate('row-delete-dispatch', { type: 'rows.delete', sheet, range: structuralRow })) await verifyMarker('row-delete', structuralCell)
+      // Never perform structural mutations unless the seed is proven in the live editor.
+      if (seedVerified) {
+        const rowInserted = await mutate('row-insert-dispatch', { type: 'rows.insert', sheet, range: structuralRow })
+        if (rowInserted) {
+          shapeSafe = false
+          await verifyMarker('row-insert', rowMovedCell)
+          // Cleanup is attempted even when movement verification failed.
+          const rowDeleted = await mutate('row-delete-dispatch', { type: 'rows.delete', sheet, range: structuralRow })
+          if (rowDeleted) shapeSafe = await verifyMarker('row-delete', structuralCell)
+        } else {
+          shapeSafe = false
+        }
+
+        // Do not compound mutations unless row shape restoration is proven.
+        if (shapeSafe) {
+          const columnInserted = await mutate('column-insert-dispatch', { type: 'columns.insert', sheet, range: structuralColumn })
+          if (columnInserted) {
+            shapeSafe = false
+            await verifyMarker('column-insert', columnMovedCell)
+            // Cleanup is attempted even when movement verification failed.
+            const columnDeleted = await mutate('column-delete-dispatch', { type: 'columns.delete', sheet, range: structuralColumn })
+            if (columnDeleted) shapeSafe = await verifyMarker('column-delete', structuralCell)
+          } else {
+            shapeSafe = false
+          }
+        } else {
+          steps.push({ name: 'column-structural-gate', status: 'FAIL', verification: { status: 'FAIL', reason: 'column mutation skipped because row shape restoration was not proven' } })
+        }
+      } else {
+        steps.push({ name: 'structural-mutation-gate', status: 'FAIL', verification: { status: 'FAIL', reason: 'structural mutation skipped because marker seed read-back failed' } })
       }
 
-      if (await mutate('column-insert-dispatch', { type: 'columns.insert', sheet, range: structuralColumn })) {
-        await verifyMarker('column-insert', columnMovedCell)
-        if (await mutate('column-delete-dispatch', { type: 'columns.delete', sheet, range: structuralColumn })) await verifyMarker('column-delete', structuralCell)
+      // Restore the original J20 only when workbook shape is known to be safe.
+      if (shapeSafe) {
+        await restoreOriginal(original)
+      } else {
+        steps.push({ name: 'marker-restore-gate', status: 'FAIL', verification: { status: 'FAIL', reason: 'original content restore not attempted because workbook shape is not proven safe' } })
       }
-
-      // Restore the original J20 content after the structural shape has been restored.
-      const restoreFormula = original.formula || null
-      const restoreValue = restoreFormula ? null : original.rawValue
-      const restored = await writeBulkInFrame(frame, apiHely, {
-        sheet,
-        range: structuralCell,
-        values: [[restoreValue]],
-        formulas: restoreFormula ? [[restoreFormula]] : null,
-        callbackTimeoutMs: timeoutMs,
-      })
-      steps.push({ name: 'marker-restore', status: restored && restored.ok ? 'PASS' : 'FAIL', result: restored,
-        verification: { status: restored && restored.ok ? 'PASS' : 'FAIL', expected: 'original J20 content restored for disposable acceptance workbook' } })
     }
   }
 
@@ -165,4 +225,4 @@ async function runM43AcceptanceLive({ url, user, pass, fileId, loadPlaywright, o
   } finally { await browser.close().catch(() => {}) }
 }
 
-module.exports = { statusOf, overall, firstCell, markerVerification, runM43AcceptanceInFrame, runM43AcceptanceLive }
+module.exports = { statusOf, overall, firstCell, markerVerification, originalContentVerification, runM43AcceptanceInFrame, runM43AcceptanceLive }
