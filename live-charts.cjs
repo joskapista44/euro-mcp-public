@@ -1,0 +1,75 @@
+'use strict'
+
+function chartCommand(spec) {
+  function has(o,n){ return !!o && typeof o[n] === 'function' }
+  function fail(outcome,error,extra){ var x={ok:false,outcome:outcome,source:'live-coedit-editor',error:error}; if(extra)for(var k in extra)x[k]=extra[k]; return x }
+  function safe(o,n){ try{return has(o,n)?o[n]():null}catch(_){return null} }
+  function describe(c,index){
+    if(!c)return null
+    var series=null
+    try{series=has(c,'GetAllSeries')?(c.GetAllSeries()||[]).length:null}catch(_){}
+    return {index:index,name:safe(c,'GetName'),chartType:safe(c,'GetChartType'),title:safe(c,'GetTitle'),width:safe(c,'GetWidth'),height:safe(c,'GetHeight'),seriesCount:series,classType:safe(c,'GetClassType')}
+  }
+  function sheetOf(name){ try{return has(Api,'GetSheet')?Api.GetSheet(name):null}catch(_){return null} }
+  function chartsOf(sheet){ if(!has(sheet,'GetAllCharts'))return null; try{return sheet.GetAllCharts()||[]}catch(_){return null} }
+  try{
+    if(!spec||typeof spec!=='object')return fail('invalid-operation','spec is required')
+    if(!spec.sheet)return fail('invalid-operation','sheet is required')
+    var sheet=sheetOf(spec.sheet); if(!sheet)return fail('sheet-not-found','worksheet not found',{sheet:spec.sheet})
+    var charts=chartsOf(sheet); if(charts===null)return fail('unsupported','ApiWorksheet.GetAllCharts is unavailable')
+    if(spec.type==='chart.inspect'){
+      var inventory=[]; for(var i=0;i<charts.length;i++)inventory.push(describe(charts[i],i))
+      return {ok:true,outcome:'ok',source:'live-coedit-editor',operation:spec.type,sheet:spec.sheet,count:inventory.length,charts:inventory,verification:{status:'PASS',actual:inventory}}
+    }
+    if(spec.type==='chart.create'){
+      if(!has(sheet,'AddChart'))return fail('unsupported','ApiWorksheet.AddChart is unavailable')
+      if(!spec.range||!spec.chartType)return fail('invalid-operation','range and chartType are required')
+      var before=charts.length, range=String(spec.range), q=String(spec.sheet).replace(/'/g,"''"), dataRange="'"+q+"'!"+range
+      var style=spec.style==null?1:Number(spec.style), width=spec.width==null?3600000:Number(spec.width), height=spec.height==null?2160000:Number(spec.height)
+      var fromCol=spec.fromCol==null?5:Number(spec.fromCol), colOffset=spec.colOffset==null?0:Number(spec.colOffset), fromRow=spec.fromRow==null?0:Number(spec.fromRow), rowOffset=spec.rowOffset==null?0:Number(spec.rowOffset)
+      var chart=null
+      try{chart=sheet.AddChart(dataRange,!!spec.inRows,String(spec.chartType),style,width,height,fromCol,colOffset,fromRow,rowOffset)}catch(err){return fail('operation-error',String(err&&err.message?err.message:err))}
+      if(!chart)return fail('operation-error','ApiWorksheet.AddChart returned null')
+      if(spec.name!=null){if(!has(chart,'SetName'))return fail('unsupported','ApiChart.SetName is unavailable');chart.SetName(String(spec.name))}
+      if(spec.title!=null){if(!has(chart,'SetTitle'))return fail('unsupported','ApiChart.SetTitle is unavailable');chart.SetTitle(String(spec.title),spec.titleFontSize==null?12:Number(spec.titleFontSize),spec.titleBold!==false)}
+      if(spec.legendPos!=null){if(!has(chart,'SetLegendPos'))return fail('unsupported','ApiChart.SetLegendPos is unavailable');chart.SetLegendPos(String(spec.legendPos))}
+      var after=chartsOf(sheet); if(after===null)return fail('unsupported','chart readback unavailable after create')
+      var actual=null, idx=-1
+      if(spec.name!=null){for(var j=0;j<after.length;j++){if(String(safe(after[j],'GetName'))===String(spec.name)){actual=describe(after[j],j);idx=j;break}}}
+      if(!actual&&after.length===before+1){idx=after.length-1;actual=describe(after[idx],idx)}
+      var mismatches=[]
+      if(after.length!==before+1)mismatches.push('count')
+      if(!actual)mismatches.push('created-chart')
+      if(actual&&actual.chartType!=null&&String(actual.chartType)!==String(spec.chartType))mismatches.push('chartType')
+      if(spec.name!=null&&actual&&actual.name!=null&&String(actual.name)!==String(spec.name))mismatches.push('name')
+      if(spec.title!=null&&actual&&actual.title!=null&&String(actual.title)!==String(spec.title))mismatches.push('title')
+      if(actual&&actual.width!=null&&Number(actual.width)!==width)mismatches.push('width')
+      if(actual&&actual.height!=null&&Number(actual.height)!==height)mismatches.push('height')
+      if(mismatches.length)return fail('verification-failed','live chart readback mismatch',{beforeCount:before,afterCount:after.length,actual:actual,mismatches:mismatches})
+      var unknown=[]
+      if(actual.chartType==null)unknown.push('chartType'); if(spec.title!=null&&actual.title==null)unknown.push('title'); if(actual.width==null)unknown.push('width'); if(actual.height==null)unknown.push('height')
+      if(unknown.length)return {ok:true,outcome:'unknown',source:'live-coedit-editor',operation:spec.type,sheet:spec.sheet,beforeCount:before,afterCount:after.length,actual:actual,verification:{status:'UNKNOWN',reason:'required live chart getters unavailable',unknown:unknown}}
+      return {ok:true,outcome:'ok',source:'live-coedit-editor',operation:spec.type,sheet:spec.sheet,beforeCount:before,afterCount:after.length,actual:actual,verification:{status:'PASS',expected:{chartType:spec.chartType,name:spec.name||null,title:spec.title||null,width:width,height:height},actual:actual}}
+    }
+    if(spec.type==='chart.delete'){
+      var index=spec.index==null?0:Number(spec.index), target=null
+      if(spec.name!=null){for(var k=0;k<charts.length;k++)if(String(safe(charts[k],'GetName'))===String(spec.name)){target=charts[k];index=k;break}}
+      else if(Number.isInteger(index)&&index>=0&&index<charts.length)target=charts[index]
+      if(!target)return fail('invalid-operation','chart target not found',{count:charts.length})
+      if(!has(target,'Delete'))return fail('unsupported','ApiChart.Delete is unavailable')
+      var deleted=describe(target,index); target.Delete(); var remaining=chartsOf(sheet)
+      if(remaining===null)return fail('unsupported','chart readback unavailable after delete')
+      if(remaining.length!==charts.length-1)return fail('verification-failed','chart count did not decrease after delete',{beforeCount:charts.length,afterCount:remaining.length})
+      if(spec.name!=null){for(var m=0;m<remaining.length;m++)if(String(safe(remaining[m],'GetName'))===String(spec.name))return fail('verification-failed','named chart still exists after delete')}
+      return {ok:true,outcome:'ok',source:'live-coedit-editor',operation:spec.type,sheet:spec.sheet,deleted:deleted,beforeCount:charts.length,afterCount:remaining.length,verification:{status:'PASS',expectedCount:charts.length-1,actualCount:remaining.length}}
+    }
+    return fail('invalid-operation','unknown chart operation: '+spec.type)
+  }catch(err){return fail('chart-error',String(err&&err.message?err.message:err))}
+}
+
+async function runChartInFrame(frame,apiHely,spec,timeoutMs=15000){
+  const body=`return (${chartCommand.toString()})(${JSON.stringify(spec)});`
+  return frame.evaluate(({u,body,timeout})=>new Promise(resolve=>{const editor=u==='window.editor'?window.editor:(window.Asc||{}).editor;let done=false;const finish=v=>{if(!done){done=true;resolve(v)}};if(!editor||typeof editor.callCommand!=='function')return finish({ok:false,outcome:'nincs-api',source:'live-coedit-editor',error:'callCommand is unavailable'});try{editor.callCommand(new Function(body),false,v=>finish(v===undefined?{ok:false,outcome:'empty-callback',source:'live-coedit-editor'}:v))}catch(err){finish({ok:false,outcome:'callcommand-error',source:'live-coedit-editor',error:String(err&&err.message?err.message:err)})}setTimeout(()=>finish({ok:false,outcome:'callback-timeout',source:'live-coedit-editor'}),timeout)}),{u:apiHely,body,timeout:timeoutMs})
+}
+
+module.exports={chartCommand,runChartInFrame}
