@@ -19,6 +19,7 @@ const SSH_USER = process.env.EURO_SSH_USER || 'user'
 const VAULT_KEY = process.env.EURO_VAULT_KEY || 'ssh_host'
 const VAULT_ROOT = process.env.EURO_VAULT_ROOT || ''
 const BOX_IP = process.env.EURO_BOX_IP || '172.22.0.1'
+const DS_URL = process.env.EO_DS_URL || 'http://127.0.0.1:8081'
 const TIMEOUT_MS = Number(process.env.EURO_TIMEOUT_MS || 90000)
 // On the measured EuroOffice deployment the JWT is owned by the running Document Server
 // container, not by a host-side env file. The SSH transport therefore streams only that one
@@ -73,6 +74,7 @@ function shellQuote(value) { return `'${String(value).replace(/'/g, `'"'"'`)}'` 
 function remoteHelperCommand(scriptB64, docArg, docFlag, traceArg) {
   const args = [scriptB64, docArg, BOX_IP, docFlag, traceArg].map(shellQuote).join(' ')
   const container = shellQuote(JWT_CONTAINER)
+  const dsUrl = shellQuote(DS_URL)
   // mktemp creates a regular file; remove it immediately and replace the pathname with a FIFO.
   // docker writes JWT_SECRET into the pipe while Python reads it as its env-file input. No secret
   // bytes are persisted on the SSH host. `wait` also prevents a hidden docker-exec failure.
@@ -83,7 +85,7 @@ function remoteHelperCommand(scriptB64, docArg, docFlag, traceArg) {
     'mkfifo -m 600 "$p"',
     'trap \'rm -f "$p"\' EXIT HUP INT TERM',
     `(docker exec ${container} sh -c 'if [ -z "$JWT_SECRET" ]; then exit 41; fi; printf "JWT_SECRET=%s\\n" "$JWT_SECRET"' >"$p") & jwtpid=$!`,
-    `EO_ENV_FILE="$p" python3 - ${args}`,
+    `EO_ENV_FILE="$p" EO_DS_URL=${dsUrl} python3 - ${args}`,
     'rc=$?',
     'wait "$jwtpid" || { echo "JWT source failed" >&2; exit 42; }',
     'exit "$rc"',
