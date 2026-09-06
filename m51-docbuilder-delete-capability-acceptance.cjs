@@ -1,12 +1,16 @@
 'use strict'
 
 const {runJob}=require('./runner.cjs')
+const {xlsxMag}=require('./euro-magok.cjs')
 
+// The historical, live-proven DocBuilder XLSX route always opens a type-correct XLSX seed.
+// Do not use builder.CreateFile("xlsx") here: that route is intentionally unsupported in this
+// codebase and has already been measured to kill jobs on this deployment. The helper may serve
+// the bytes under a .docx-looking URL; Document Server detects the OOXML package type from the
+// content, which is the same path create_document used for the earlier live XLSX acceptances.
 function buildProbeScript(){
  return [
-  'builder.OpenFile("__DOC_URL__", "docx");',
-  'builder.CloseFile();',
-  'builder.CreateFile("xlsx");',
+  'builder.OpenFile("__DOC_URL__");',
   'var ws = Api.GetActiveSheet();',
   'ws.SetName("M51_PROBE");',
   'ws.GetRange("A1").SetValue("Quarter");',
@@ -17,6 +21,7 @@ function buildProbeScript(){
   'ws.GetRange("B3").SetValue(140);',
   'ws.GetRange("A4").SetValue("Q3");',
   'ws.GetRange("B4").SetValue(125);',
+  // Exact XLSX AddChart shape previously proven against this DocBuilder deployment.
   'var c = ws.AddChart("A1:B4", false, "bar", 2, 3600000, 2200000, 4, 0, 0, 0);',
   'var before = ws.GetAllCharts ? (ws.GetAllCharts() || []).length : -1;',
   'var hasDelete = !!(c && typeof c.Delete === "function");',
@@ -24,6 +29,8 @@ function buildProbeScript(){
   'if (hasDelete) deleted = !!c.Delete();',
   'var after = ws.GetAllCharts ? (ws.GetAllCharts() || []).length : -1;',
   'var pass = !!c && hasDelete && deleted && before === 1 && after === 0;',
+  // workbook.xml is exposed by box-helper for XLSX, so encode the machine verdict in the sheet
+  // name rather than relying on worksheet XML or on the HTTP response alone.
   'ws.SetName(pass ? "M51_DELETE_PASS_1_0" : ("M51_DELETE_FAIL_" + (hasDelete ? "HAS" : "NO") + "_" + before + "_" + after));',
   'builder.SaveFile("xlsx", "m51-delete-probe.xlsx");',
   'builder.CloseFile();'
@@ -39,7 +46,13 @@ function verify(job){
 }
 
 async function main(){
- const job=await runJob({script:buildProbeScript(),returnDoc:true,traceId:`m51-docbuilder-delete-cap-${Date.now()}`})
+ const documentBase64=xlsxMag(['M51_SEED']).toString('base64')
+ const job=await runJob({
+  script:buildProbeScript(),
+  documentBase64,
+  returnDoc:true,
+  traceId:`m51-docbuilder-delete-cap-${Date.now()}`
+ })
  const verification=verify(job)
  const result={milestone:'M5.1 DocBuilder chart Delete capability',source:'docbuilder',outcome:verification.status,verification,job:{ok:job.ok,outcome:job.outcome,detail:job.detail,dsError:job.dsError,kind:job.kind,serverFetches:job.serverFetches,savedBytes:job.savedBytes,hasReturnedDocument:!!job.savedBase64,exitCode:job.exitCode,stderr:job.stderr}}
  console.log(JSON.stringify(result,null,2))
