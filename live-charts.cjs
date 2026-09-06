@@ -96,8 +96,13 @@ function chartCommand(spec) {
             if(spec.name==null&&String(dc)==='chart'&&d===index){drawing=drawings[d];break}
           }
         }
-        if(!drawing||!has(drawing,'Delete'))return fail('unsupported','chart deletion is unavailable on ApiChart and matching ApiDrawing')
-        deleteTarget=drawing; deleteVia='drawing'
+        if(drawing&&has(drawing,'Delete')){deleteTarget=drawing;deleteVia='drawing'}
+        else {
+          var selectable=has(target,'Select')?target:(drawing&&has(drawing,'Select')?drawing:null)
+          if(!selectable)return fail('unsupported','chart deletion is unavailable: no public Delete() or Select() on matching chart/drawing')
+          try{selectable.Select()}catch(err){return fail('operation-error','public chart selection failed',{detail:String(err&&err.message?err.message:err)})}
+          return {ok:true,outcome:'editor-delete-key-required',source:'live-coedit-editor',operation:spec.type,sheet:spec.sheet,deleted:deleted,deleteVia:'public-select+editor-delete-key',beforeCount:charts.length,targetName:spec.name==null?null:String(spec.name),verification:{status:'PENDING',reason:'public ApiDrawing.Select succeeded; editor Delete key and public readback are required'}}
+        }
       }
       deleteTarget.Delete(); var remaining=chartsOf(sheet)
       if(remaining===null)return fail('unsupported','chart readback unavailable after delete')
@@ -109,9 +114,25 @@ function chartCommand(spec) {
   }catch(err){return fail('chart-error',String(err&&err.message?err.message:err))}
 }
 
-async function runChartInFrame(frame,apiHely,spec,timeoutMs=15000){
+async function callChartCommand(frame,apiHely,spec,timeoutMs){
   const body=`return (${chartCommand.toString()})(${JSON.stringify(spec)});`
   return frame.evaluate(({u,body,timeout})=>new Promise(resolve=>{const editor=u==='window.editor'?window.editor:(window.Asc||{}).editor;let done=false;const finish=v=>{if(!done){done=true;resolve(v)}};if(!editor||typeof editor.callCommand!=='function')return finish({ok:false,outcome:'nincs-api',source:'live-coedit-editor',error:'callCommand is unavailable'});try{editor.callCommand(new Function(body),false,v=>finish(v===undefined?{ok:false,outcome:'empty-callback',source:'live-coedit-editor'}:v))}catch(err){finish({ok:false,outcome:'callcommand-error',source:'live-coedit-editor',error:String(err&&err.message?err.message:err)})}setTimeout(()=>finish({ok:false,outcome:'callback-timeout',source:'live-coedit-editor'}),timeout)}),{u:apiHely,body,timeout:timeoutMs})
+}
+
+async function runChartInFrame(frame,apiHely,spec,timeoutMs=15000){
+  const first=await callChartCommand(frame,apiHely,spec,timeoutMs)
+  if(!first||spec.type!=='chart.delete'||first.outcome!=='editor-delete-key-required')return first
+  try{
+    await frame.evaluate(()=>window.focus())
+    await frame.page().keyboard.press('Delete')
+  }catch(err){return {ok:false,outcome:'operation-error',source:'live-coedit-editor',operation:spec.type,error:'editor Delete key dispatch failed',detail:String(err&&err.message?err.message:err),deleteVia:first.deleteVia,beforeCount:first.beforeCount}}
+  await new Promise(resolve=>setTimeout(resolve,250))
+  const after=await callChartCommand(frame,apiHely,{type:'chart.inspect',sheet:spec.sheet},timeoutMs)
+  if(!after||!after.ok)return {ok:false,outcome:'verification-unknown',source:'live-coedit-editor',operation:spec.type,error:'chart readback unavailable after editor Delete key',deleteVia:first.deleteVia,beforeCount:first.beforeCount,readback:after}
+  const expected=Number(first.beforeCount)-1
+  const nameStillPresent=spec.name!=null&&Array.isArray(after.charts)&&after.charts.some(c=>String(c&&c.name)===String(spec.name))
+  if(after.count!==expected||nameStillPresent)return {ok:false,outcome:'verification-failed',source:'live-coedit-editor',operation:spec.type,error:nameStillPresent?'named chart still exists after editor Delete key':'chart count did not decrease after editor Delete key',deleteVia:first.deleteVia,beforeCount:first.beforeCount,afterCount:after.count,targetName:spec.name==null?null:String(spec.name),readback:after}
+  return {ok:true,outcome:'ok',source:'live-coedit-editor',operation:spec.type,sheet:spec.sheet,deleted:first.deleted,deleteVia:first.deleteVia,beforeCount:first.beforeCount,afterCount:after.count,verification:{status:'PASS',expectedCount:expected,actualCount:after.count,nameAbsent:spec.name==null?null:true}}
 }
 
 module.exports={chartCommand,runChartInFrame}
