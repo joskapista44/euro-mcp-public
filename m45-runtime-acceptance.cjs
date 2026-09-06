@@ -3,6 +3,7 @@
 const { runOperationInFrame } = require('./workbook-ops.cjs')
 const { runTableInFrame } = require('./live-tables.cjs')
 const { writeBulkInFrame } = require('./bulk-writer.cjs')
+const { readRangeInFrame } = require('./range-reader.cjs')
 
 const LIVE_SOURCE = 'live-coedit-editor'
 
@@ -19,8 +20,20 @@ function overall(steps) {
   return 'PASS'
 }
 
+function matrixFromRead(read) {
+  if (!read || !read.ok || !Array.isArray(read.cells)) return null
+  return read.cells.map((row) => row.map((cell) => cell ? cell.rawValue : null))
+}
+
+function sameMatrix(actual, expected) {
+  return Array.isArray(actual) && actual.length === expected.length && actual.every((row, r) =>
+    Array.isArray(row) && row.length === expected[r].length && row.every((value, c) => String(value) === String(expected[r][c]))
+  )
+}
+
 async function runM45AcceptanceInFrame(frame, apiHely, suffix = Date.now().toString(36)) {
   const sheet = `M45T_${suffix}`.slice(0, 28)
+  const values = [['Product','Price'],['Apples',100],['Oranges',150]]
   const steps = []
   const cleanup = []
   let created = false
@@ -34,22 +47,36 @@ async function runM45AcceptanceInFrame(frame, apiHely, suffix = Date.now().toStr
       const seed = await writeBulkInFrame(frame, apiHely, {
         sheet,
         range:'A1:B3',
-        values:[['Product','Price'],['Apples',100],['Oranges',150]],
+        values,
         callbackTimeoutMs:15000,
       })
-      steps.push({ name:'seed-data', ...seed, verification:{ status:seed && seed.ok && seed.verified ? 'PASS' : 'FAIL' } })
+      steps.push({ name:'seed-data-write', ...seed })
 
-      if (seed && seed.ok && seed.verified) {
-        const createTable = await runTableInFrame(frame, apiHely, {
-          type:'table.create',
-          sheet,
-          range:'A1:B3',
-          name:`T_${suffix}`.slice(0,24),
+      if (seed && seed.ok) {
+        const read = await readRangeInFrame(frame, apiHely, { sheet, range:'A1:B3', maxCells:6, callbackTimeoutMs:15000 })
+        const actual = matrixFromRead(read)
+        const seedPass = !!(read && read.ok && sameMatrix(actual, values))
+        steps.push({
+          name:'seed-data-readback',
+          ok:seedPass,
+          outcome:seedPass ? 'ok' : 'verification-failed',
+          source:LIVE_SOURCE,
+          verification:{ status:seedPass ? 'PASS' : 'FAIL', expected:values, actual },
+          observation:read,
         })
-        steps.push({ name:'create-table', ...createTable })
 
-        const inspectTable = await runTableInFrame(frame, apiHely, { type:'table.inspect', sheet })
-        steps.push({ name:'inspect-table', ...inspectTable })
+        if (seedPass) {
+          const createTable = await runTableInFrame(frame, apiHely, {
+            type:'table.create',
+            sheet,
+            range:'A1:B3',
+            name:`T_${suffix}`.slice(0,24),
+          })
+          steps.push({ name:'create-table', ...createTable })
+
+          const inspectTable = await runTableInFrame(frame, apiHely, { type:'table.inspect', sheet })
+          steps.push({ name:'inspect-table', ...inspectTable })
+        }
       }
     }
   } catch (err) {
@@ -76,4 +103,4 @@ async function runM45AcceptanceInFrame(frame, apiHely, suffix = Date.now().toStr
   return { milestone:'M4.5', source:LIVE_SOURCE, outcome, testOutcome, cleanupOutcome, humanObservationRequired:false, sheet, steps, cleanup }
 }
 
-module.exports = { statusOf, overall, runM45AcceptanceInFrame }
+module.exports = { statusOf, overall, matrixFromRead, sameMatrix, runM45AcceptanceInFrame }
