@@ -20,7 +20,7 @@ async function main(){
   await page.goto(`${base}/index.php/apps/eurooffice/${fileId}`,{waitUntil:'domcontentloaded',timeout:60000});await page.waitForTimeout(22000)
   const frame=page.frames().find(f=>/spreadsheeteditor/.test(f.url()));if(!frame)throw new Error('spreadsheeteditor frame did not open')
   const apiHely=await frame.evaluate(()=>((window.Asc||{}).editor&&typeof window.Asc.editor.callCommand==='function')?'window.Asc.editor':(window.editor&&typeof window.editor.callCommand==='function')?'window.editor':null);if(!apiHely)throw new Error('callCommand is unavailable')
-  const steps=[];let outcome='PASS',cleanupOutcome='DEFERRED_RUNTIME_CAPABILITY'
+  const steps=[];let outcome='PASS'
   const data=[['Quarter','Revenue'],['Q1',100],['Q2',140],['Q3',125]]
   let w=await writeBulkInFrame(frame,apiHely,{sheet,range,values:data});steps.push({name:'seed-data-write',result:w});if(!w.ok)outcome='FAIL'
   let rr=await readRangeInFrame(frame,apiHely,{sheet,range});let seedMatches=!!rr.ok&&sameMatrix(rr.cells,data);steps.push({name:'seed-data-readback',result:rr,expected:data,matches:seedMatches});if(!seedMatches)outcome='FAIL'
@@ -33,9 +33,15 @@ async function main(){
    let post=await runChartInFrame(frame,apiHely,{type:'chart.inspect',sheet});steps.push({name:'post-create-inspect',result:post});if(!post.ok||post.count!==before+1)outcome='FAIL'
    let modified=await runChartInFrame(frame,apiHely,{type:'chart.modify',sheet,name:chartName,title:'Quarterly revenue — verified',width:4000000,height:2400000});steps.push({name:'modify-chart',result:modified});if(!modified.ok||!modified.verification||modified.verification.status!=='PASS')outcome=modified&&modified.verification&&modified.verification.status==='UNKNOWN'?'UNKNOWN':'FAIL'
    let postModify=await runChartInFrame(frame,apiHely,{type:'chart.inspect',sheet});steps.push({name:'post-modify-inspect',result:postModify});let modifiedInventory=postModify.ok?postModify.charts.find(c=>String(c.name)===chartName):null;if(!modifiedInventory||String(modifiedInventory.title||'').replace(/[\r\n]+$/g,'')!=='Quarterly revenue — verified'||Number(modifiedInventory.width)!==4000000||Number(modifiedInventory.height)!==2400000||modifiedInventory.seriesCount!==1)outcome='FAIL'
-   steps.push({name:'chart-delete',result:{ok:false,outcome:'deferred-runtime-capability',source:'live-coedit-editor',reason:'EuroOffice 9.3.4 public spreadsheet ApiChart/ApiDrawing objects do not expose Delete(); independently reproduced in live co-edit and DocBuilder',recheck:'EuroOffice based on ONLYOFFICE 9.4+'}})
+   let deleted=await runChartInFrame(frame,apiHely,{type:'chart.delete',sheet,name:chartName});steps.push({name:'chart-delete',result:deleted})
+   if(!deleted.ok||!deleted.verification||deleted.verification.status!=='PASS')outcome=(deleted&&['unsupported','verification-unknown'].includes(deleted.outcome))?'UNKNOWN':'FAIL'
+   let postDelete=await runChartInFrame(frame,apiHely,{type:'chart.inspect',sheet});steps.push({name:'post-delete-inspect',result:postDelete})
+   const nameAbsent=!!postDelete.ok&&Array.isArray(postDelete.charts)&&!postDelete.charts.some(c=>String(c&&c.name)===chartName)
+   const countRestored=!!postDelete.ok&&postDelete.count===before
+   steps.push({name:'delete-acceptance',expected:{count:before,nameAbsent:true},actual:{count:postDelete&&postDelete.count,nameAbsent},matches:countRestored&&nameAbsent})
+   if(!countRestored||!nameAbsent)outcome='FAIL'
   }
-  console.log(JSON.stringify({milestone:'M5.1',source:'live-coedit-editor',outcome,testOutcome:outcome,cleanupOutcome,humanObservationRequired:false,deferred:[{operation:'chart.delete',reason:'runtime capability; recheck on EuroOffice based on ONLYOFFICE 9.4+'}],sheet,range,chartName,steps,editor:'spreadsheeteditor',apiHely},null,2))
+  console.log(JSON.stringify({milestone:'M5.1',source:'live-coedit-editor',outcome,testOutcome:outcome,humanObservationRequired:false,sheet,range,chartName,steps,editor:'spreadsheeteditor',apiHely},null,2))
   if(outcome!=='PASS')process.exitCode=2
  }finally{await browser.close()}
 }
