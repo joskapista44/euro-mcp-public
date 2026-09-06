@@ -32,7 +32,7 @@ function formulaWriterCommand(sheetName, rangeAddress, formulas, maxCells) {
     var parsed=parseRange(rangeAddress); if(!parsed)return fail('invalid-range','range must be rectangular A1')
     var count=parsed.rows*parsed.columns; if(count>maxCells)return fail('range-too-large','target range exceeds the configured cell limit',{cellCount:count,maxCells:maxCells})
     if(!Array.isArray(formulas)||formulas.length!==parsed.rows)return fail('dimension-mismatch','formula matrix dimensions must exactly match target range')
-    var written=0
+    var written=0, writer=null
     for(var r=0;r<parsed.rows;r++){
       if(!Array.isArray(formulas[r])||formulas[r].length!==parsed.columns)return fail('dimension-mismatch','formula matrix dimensions must exactly match target range')
       for(var c=0;c<parsed.columns;c++){
@@ -40,11 +40,16 @@ function formulaWriterCommand(sheetName, rangeAddress, formulas, maxCells) {
         var address=colLabel(parsed.start.column+c)+(parsed.start.row+r)
         var cell=null; try{cell=sheet.GetRange(address)}catch(_){}
         if(!cell)return fail('range-not-found','a target cell could not be resolved',{cell:address})
-        if(!has(cell,'SetFormula'))return fail('unsupported','ApiRange.SetFormula is unavailable',{cell:address})
-        try{cell.SetFormula(f);written++}catch(err){return fail('write-error',String(err&&err.message?err.message:err),{cell:address})}
+        // SetFormula is paid-edition-only in current ONLYOFFICE Docs. The measured live runtime
+        // exposes GetFormula but not SetFormula; SetValue accepts formula strings beginning with
+        // '=' and creates a real formula cell. Prefer SetFormula where present, otherwise use the
+        // live-compatible SetValue path. Same-session read-back below remains acceptance authority.
+        var method=has(cell,'SetFormula')?'SetFormula':(has(cell,'SetValue')?'SetValue':null)
+        if(!method)return fail('unsupported','neither ApiRange.SetFormula nor ApiRange.SetValue is available',{cell:address})
+        try{cell[method](f);written++; if(writer===null)writer=method; else if(writer!==method)writer='mixed'}catch(err){return fail('write-error',String(err&&err.message?err.message:err),{cell:address,writer:method})}
       }
     }
-    return {ok:true,outcome:'ok',source:'live-coedit-editor',sheet:sheetName,range:String(rangeAddress).toUpperCase(),writtenFormulas:written,cellCount:count}
+    return {ok:true,outcome:'ok',source:'live-coedit-editor',sheet:sheetName,range:String(rangeAddress).toUpperCase(),writtenFormulas:written,cellCount:count,writer:writer}
   } catch(err){ return fail('formula-writer-error',String(err&&err.message?err.message:err),{sheet:sheetName,range:rangeAddress}) }
 }
 
