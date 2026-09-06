@@ -33,11 +33,13 @@ async function runIntegrated(frame, apiHely) {
     r=await writeBulkInFrame(frame,apiHely,{sheet:data,range:'A1:D4',values});push('core','seed-business-data',r);if(!r.ok)throw new Error('seed failed')
     const rd=await readRangeInFrame(frame,apiHely,{sheet:data,range:'A1:D4',maxCells:32});const seedPass=rd&&rd.ok&&rd.cells&&rd.cells.length===4;push('core','seed-live-readback',rd,seedPass?'PASS':'FAIL');if(!seedPass)throw new Error('seed readback failed')
 
-    r=await callFormatting(frame,apiHely,data,'A1:D1',{bold:true,fillColor:[220,230,241],alignHorizontal:'center'});push('M4.1','header-format',r);if(status(r)==='FAIL')throw new Error('formatting failed')
-    r=await callFormatting(frame,apiHely,data,'B2:B4',{numberFormat:'#,##0'});push('M4.2','principal-number-format',r);if(status(r)==='FAIL')throw new Error('number format failed')
-    r=await callFormatting(frame,apiHely,data,'C2:C4',{numberFormat:'0.00%'});push('M4.2','rate-number-format',r);if(status(r)==='FAIL')throw new Error('percent format failed')
+    // Integrated M4.1 must itself be machine-verifiable. Bold/alignment are already covered by
+    // the dedicated M4.1 acceptance but lack getters in this runtime, so use a business-relevant
+    // header fill here: SetFillColor + live GetFillColor gives an exact postcondition.
+    r=await callFormatting(frame,apiHely,data,'A1:D1',{fillColor:[220,230,241]});push('M4.1','header-fill-format',r);if(status(r)!=='PASS')throw new Error('measurable header formatting failed')
+    r=await callFormatting(frame,apiHely,data,'B2:B4',{numberFormat:'#,##0'});push('M4.2','principal-number-format',r);if(status(r)!=='PASS')throw new Error('number format failed')
+    r=await callFormatting(frame,apiHely,data,'C2:C4',{numberFormat:'0.00%'});push('M4.2','rate-number-format',r);if(status(r)!=='PASS')throw new Error('percent format failed')
 
-    // M4.3 layout: use the already proven direct live AutoFit API and require the command to execute.
     const layoutBody=`return (function(s,r){var sh=Api.GetSheet(s),x=sh&&sh.GetRange(r);if(!x||typeof x.AutoFit!=='function')return {ok:false,outcome:'unsupported',source:'live-coedit-editor'};x.AutoFit(false,true);return {ok:true,outcome:'ok',source:'live-coedit-editor',sheet:s,range:r};})(${JSON.stringify(data)},'A:D');`
     r=await frame.evaluate(({u,b})=>new Promise(resolve=>{const e=u==='window.editor'?window.editor:(window.Asc||{}).editor;e.callCommand(new Function(b),false,v=>resolve(v))}),{u:apiHely,b:layoutBody});push('M4.3','autofit-columns',r);if(!r||!r.ok)throw new Error('autofit failed')
 
