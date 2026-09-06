@@ -1,0 +1,26 @@
+'use strict'
+
+const { runChartCapabilityInFrame } = require('./m51-chart-capability-probe.cjs')
+
+function loadPlaywright(){for(const p of [process.env.EURO_PLAYWRIGHT_PATH,'playwright','/home/user/marveen/node_modules/playwright'].filter(Boolean)){try{return require(p)}catch(_){}}throw new Error('Playwright is unavailable')}
+
+async function main(){
+  const base=process.env.EURO_NC_BASE_URL,fileId=process.env.EURO_NC_FILE_ID,user=process.env.EURO_NC_USER,password=process.env.EURO_NC_PASSWORD,sheet=process.env.EURO_SHEET||'Sheet1'
+  if(!base||!fileId||!user||!password)throw new Error('EURO_NC_BASE_URL, EURO_NC_FILE_ID, EURO_NC_USER and EURO_NC_PASSWORD are required')
+  const {chromium}=loadPlaywright(),browser=await chromium.launch()
+  try{
+    const ctx=await browser.newContext({viewport:{width:1400,height:900}}),page=await ctx.newPage()
+    await page.goto(`${base}/login`,{waitUntil:'domcontentloaded',timeout:60000})
+    await page.fill('#user',user);await page.fill('#password',password)
+    await Promise.all([page.waitForNavigation({waitUntil:'domcontentloaded',timeout:60000}).catch(()=>null),page.click('button[type=submit], input[type=submit]')])
+    await page.waitForTimeout(2500);if(/\/login/.test(page.url()))throw new Error('Nextcloud login failed')
+    await page.goto(`${base}/index.php/apps/eurooffice/${fileId}`,{waitUntil:'domcontentloaded',timeout:60000});await page.waitForTimeout(22000)
+    const frame=page.frames().find(f=>/spreadsheeteditor/.test(f.url()));if(!frame)throw new Error('spreadsheeteditor frame not found')
+    const apiHely=await frame.evaluate(()=>((window.Asc||{}).editor&&typeof window.Asc.editor.callCommand==='function')?'window.Asc.editor':(window.editor&&typeof window.editor.callCommand==='function')?'window.editor':null)
+    if(!apiHely)throw new Error('callCommand unavailable')
+    const result=await runChartCapabilityInFrame(frame,apiHely,sheet)
+    console.log(JSON.stringify({milestone:'M5.1',editor:'spreadsheeteditor',apiHely,...result},null,2))
+  }finally{await browser.close()}
+}
+
+if(require.main===module)main().catch(err=>{console.error(JSON.stringify({milestone:'M5.1',outcome:'launcher-error',error:String(err&&err.message?err.message:err)},null,2));process.exitCode=1})
