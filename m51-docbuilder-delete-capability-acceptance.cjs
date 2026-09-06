@@ -41,7 +41,7 @@ function verify(job){
 async function main(){
  const job=await runJob({script:buildProbeScript(),returnDoc:true,traceId:`m51-docbuilder-delete-cap-${Date.now()}`})
  const verification=verify(job)
- const result={milestone:'M5.1 DocBuilder chart Delete capability',source:'docbuilder',outcome:verification.status,verification,job:{ok:job.ok,outcome:job.outcome,kind:job.kind,serverFetches:job.serverFetches,savedBytes:job.savedBytes,hasReturnedDocument:!!job.savedBase64}}
+ const result={milestone:'M5.1 DocBuilder chart Delete capability',source:'docbuilder',outcome:verification.status,verification,job:{ok:job.ok,outcome:job.outcome,detail:job.detail,dsError:job.dsError,kind:job.kind,serverFetches:job.serverFetches,savedBytes:job.savedBytes,hasReturnedDocument:!!job.savedBase64,exitCode:job.exitCode,stderr:job.stderr}}
  console.log(JSON.stringify(result,null,2))
  if(result.outcome!=='PASS')process.exitCode=2
 }
