@@ -5,7 +5,7 @@ const {writeBulkInFrame}=require('./bulk-writer.cjs')
 const {readRangeInFrame}=require('./range-reader.cjs')
 
 function loadPlaywright(){for(const p of [process.env.EURO_PLAYWRIGHT_PATH,'playwright','/home/user/marveen/node_modules/playwright'].filter(Boolean)){try{return require(p)}catch(_){}}throw new Error('Playwright is unavailable')}
-function normMatrix(v){return Array.isArray(v)?v.map(r=>Array.isArray(r)?r.map(x=>String(x==null?'':x)):r):v}
+function normMatrix(v){return Array.isArray(v)?v.map(r=>Array.isArray(r)?r.map(x=>String(x==null?'':(x&&typeof x==='object'&&Object.prototype.hasOwnProperty.call(x,'value')?x.value:x))):r):v}
 function sameMatrix(a,b){return JSON.stringify(normMatrix(a))===JSON.stringify(normMatrix(b))}
 async function main(){
  const base=process.env.EURO_NC_BASE_URL,fileId=process.env.EURO_NC_FILE_ID,user=process.env.EURO_NC_USER,password=process.env.EURO_NC_PASSWORD
@@ -23,7 +23,7 @@ async function main(){
   const steps=[];let outcome='PASS',cleanupOutcome='DEFERRED_RUNTIME_CAPABILITY'
   const data=[['Quarter','Revenue'],['Q1',100],['Q2',140],['Q3',125]]
   let w=await writeBulkInFrame(frame,apiHely,{sheet,range,values:data});steps.push({name:'seed-data-write',result:w});if(!w.ok)outcome='FAIL'
-  let rr=await readRangeInFrame(frame,apiHely,{sheet,range});let seedMatches=!!rr.ok&&sameMatrix(rr.values,data);steps.push({name:'seed-data-readback',result:rr,expected:data,matches:seedMatches});if(!seedMatches)outcome='FAIL'
+  let rr=await readRangeInFrame(frame,apiHely,{sheet,range});let seedMatches=!!rr.ok&&sameMatrix(rr.cells,data);steps.push({name:'seed-data-readback',result:rr,expected:data,matches:seedMatches});if(!seedMatches)outcome='FAIL'
   let initial=await runChartInFrame(frame,apiHely,{type:'chart.inspect',sheet});steps.push({name:'initial-chart-inspect',result:initial})
   if(!initial.ok)outcome='UNKNOWN'
   const before=initial.ok?initial.count:null
@@ -33,10 +33,6 @@ async function main(){
    let post=await runChartInFrame(frame,apiHely,{type:'chart.inspect',sheet});steps.push({name:'post-create-inspect',result:post});if(!post.ok||post.count!==before+1)outcome='FAIL'
    let modified=await runChartInFrame(frame,apiHely,{type:'chart.modify',sheet,name:chartName,title:'Quarterly revenue — verified',width:4000000,height:2400000});steps.push({name:'modify-chart',result:modified});if(!modified.ok||!modified.verification||modified.verification.status!=='PASS')outcome=modified&&modified.verification&&modified.verification.status==='UNKNOWN'?'UNKNOWN':'FAIL'
    let postModify=await runChartInFrame(frame,apiHely,{type:'chart.inspect',sheet});steps.push({name:'post-modify-inspect',result:postModify});let modifiedInventory=postModify.ok?postModify.charts.find(c=>String(c.name)===chartName):null;if(!modifiedInventory||String(modifiedInventory.title||'').replace(/[\r\n]+$/g,'')!=='Quarterly revenue — verified'||Number(modifiedInventory.width)!==4000000||Number(modifiedInventory.height)!==2400000||modifiedInventory.seriesCount!==1)outcome='FAIL'
-   // Deletion is deliberately not part of the M5.1 PASS gate on this deployment. It was measured
-   // independently in both live co-edit and DocBuilder: the public spreadsheet chart/drawing
-   // objects do not expose Delete() in EuroOffice 9.3.4. Keep that as an explicit deferred
-   // runtime capability rather than turning verified create/inspect/modify into a false FAIL.
    steps.push({name:'chart-delete',result:{ok:false,outcome:'deferred-runtime-capability',source:'live-coedit-editor',reason:'EuroOffice 9.3.4 public spreadsheet ApiChart/ApiDrawing objects do not expose Delete(); independently reproduced in live co-edit and DocBuilder',recheck:'EuroOffice based on ONLYOFFICE 9.4+'}})
   }
   console.log(JSON.stringify({milestone:'M5.1',source:'live-coedit-editor',outcome,testOutcome:outcome,cleanupOutcome,humanObservationRequired:false,deferred:[{operation:'chart.delete',reason:'runtime capability; recheck on EuroOffice based on ONLYOFFICE 9.4+'}],sheet,range,chartName,steps,editor:'spreadsheeteditor',apiHely},null,2))
