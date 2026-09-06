@@ -14,6 +14,12 @@ function chartCommand(spec) {
   function sheetOf(name){ try{return has(Api,'GetSheet')?Api.GetSheet(name):null}catch(_){return null} }
   function chartsOf(sheet){ if(!has(sheet,'GetAllCharts'))return null; try{return sheet.GetAllCharts()||[]}catch(_){return null} }
   function drawingsOf(sheet){ if(!has(sheet,'GetAllDrawings'))return null; try{return sheet.GetAllDrawings()||[]}catch(_){return null} }
+  function targetOf(charts,spec){
+    var index=spec.index==null?0:Number(spec.index),target=null
+    if(spec.name!=null){for(var i=0;i<charts.length;i++)if(String(safe(charts[i],'GetName'))===String(spec.name)){target=charts[i];index=i;break}}
+    else if(Number.isInteger(index)&&index>=0&&index<charts.length)target=charts[index]
+    return {target:target,index:index}
+  }
   try{
     if(!spec||typeof spec!=='object')return fail('invalid-operation','spec is required')
     if(!spec.sheet)return fail('invalid-operation','sheet is required')
@@ -53,10 +59,32 @@ function chartCommand(spec) {
       if(unknown.length)return {ok:true,outcome:'unknown',source:'live-coedit-editor',operation:spec.type,sheet:spec.sheet,beforeCount:before,afterCount:after.length,actual:actual,verification:{status:'UNKNOWN',reason:'required live chart getters unavailable',unknown:unknown}}
       return {ok:true,outcome:'ok',source:'live-coedit-editor',operation:spec.type,sheet:spec.sheet,beforeCount:before,afterCount:after.length,actual:actual,verification:{status:'PASS',expected:{chartType:spec.chartType,name:spec.name||null,title:spec.title||null,width:width,height:height},actual:actual}}
     }
+    if(spec.type==='chart.modify'){
+      var found=targetOf(charts,spec), target=found.target, index=found.index
+      if(!target)return fail('invalid-operation','chart target not found',{count:charts.length})
+      var beforeDesc=describe(target,index), changed=[]
+      if(spec.title!=null){if(!has(target,'SetTitle'))return fail('unsupported','ApiChart.SetTitle is unavailable');target.SetTitle(String(spec.title),spec.titleFontSize==null?12:Number(spec.titleFontSize),spec.titleBold!==false);changed.push('title')}
+      if(spec.width!=null||spec.height!=null){
+        if(!has(target,'SetSize'))return fail('unsupported','ApiChart.SetSize is unavailable')
+        var newWidth=spec.width==null?beforeDesc.width:Number(spec.width),newHeight=spec.height==null?beforeDesc.height:Number(spec.height)
+        if(newWidth==null||newHeight==null)return fail('unsupported','chart size readback is required for partial SetSize')
+        target.SetSize(Number(newWidth),Number(newHeight));changed.push('size')
+      }
+      if(spec.legendPos!=null){if(!has(target,'SetLegendPos'))return fail('unsupported','ApiChart.SetLegendPos is unavailable');target.SetLegendPos(String(spec.legendPos));changed.push('legendPos')}
+      if(!changed.length)return fail('invalid-operation','no supported chart modification requested')
+      var afterCharts=chartsOf(sheet); if(afterCharts===null)return fail('unsupported','chart readback unavailable after modify')
+      var reread=targetOf(afterCharts,spec), actual=reread.target?describe(reread.target,reread.index):null
+      if(!actual)return fail('verification-failed','modified chart disappeared during live readback')
+      var mm=[],unk=[]
+      if(spec.title!=null){if(actual.title==null)unk.push('title');else if(normText(actual.title)!==normText(spec.title))mm.push('title')}
+      if(spec.width!=null){if(actual.width==null)unk.push('width');else if(Number(actual.width)!==Number(spec.width))mm.push('width')}
+      if(spec.height!=null){if(actual.height==null)unk.push('height');else if(Number(actual.height)!==Number(spec.height))mm.push('height')}
+      if(mm.length)return fail('verification-failed','live chart modification readback mismatch',{before:beforeDesc,actual:actual,mismatches:mm,changed:changed})
+      if(unk.length)return {ok:true,outcome:'unknown',source:'live-coedit-editor',operation:spec.type,sheet:spec.sheet,before:beforeDesc,actual:actual,changed:changed,verification:{status:'UNKNOWN',reason:'required live chart getters unavailable',unknown:unk}}
+      return {ok:true,outcome:'ok',source:'live-coedit-editor',operation:spec.type,sheet:spec.sheet,before:beforeDesc,actual:actual,changed:changed,verification:{status:'PASS',actual:actual}}
+    }
     if(spec.type==='chart.delete'){
-      var index=spec.index==null?0:Number(spec.index), target=null
-      if(spec.name!=null){for(var k=0;k<charts.length;k++)if(String(safe(charts[k],'GetName'))===String(spec.name)){target=charts[k];index=k;break}}
-      else if(Number.isInteger(index)&&index>=0&&index<charts.length)target=charts[index]
+      var f=targetOf(charts,spec), target=f.target, index=f.index
       if(!target)return fail('invalid-operation','chart target not found',{count:charts.length})
       var deleted=describe(target,index), deleteTarget=target, deleteVia='chart'
       if(!has(deleteTarget,'Delete')){
