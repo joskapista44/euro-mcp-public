@@ -4,6 +4,7 @@ function chartCommand(spec) {
   function has(o,n){ return !!o && typeof o[n] === 'function' }
   function fail(outcome,error,extra){ var x={ok:false,outcome:outcome,source:'live-coedit-editor',error:error}; if(extra)for(var k in extra)x[k]=extra[k]; return x }
   function safe(o,n){ try{return has(o,n)?o[n]():null}catch(_){return null} }
+  function normText(v){ return v==null?v:String(v).replace(/[\r\n]+$/g,'') }
   function describe(c,index){
     if(!c)return null
     var series=null
@@ -12,6 +13,7 @@ function chartCommand(spec) {
   }
   function sheetOf(name){ try{return has(Api,'GetSheet')?Api.GetSheet(name):null}catch(_){return null} }
   function chartsOf(sheet){ if(!has(sheet,'GetAllCharts'))return null; try{return sheet.GetAllCharts()||[]}catch(_){return null} }
+  function drawingsOf(sheet){ if(!has(sheet,'GetAllDrawings'))return null; try{return sheet.GetAllDrawings()||[]}catch(_){return null} }
   try{
     if(!spec||typeof spec!=='object')return fail('invalid-operation','spec is required')
     if(!spec.sheet)return fail('invalid-operation','sheet is required')
@@ -42,7 +44,7 @@ function chartCommand(spec) {
       if(!actual)mismatches.push('created-chart')
       if(actual&&actual.chartType!=null&&String(actual.chartType)!==String(spec.chartType))mismatches.push('chartType')
       if(spec.name!=null&&actual&&actual.name!=null&&String(actual.name)!==String(spec.name))mismatches.push('name')
-      if(spec.title!=null&&actual&&actual.title!=null&&String(actual.title)!==String(spec.title))mismatches.push('title')
+      if(spec.title!=null&&actual&&actual.title!=null&&normText(actual.title)!==normText(spec.title))mismatches.push('title')
       if(actual&&actual.width!=null&&Number(actual.width)!==width)mismatches.push('width')
       if(actual&&actual.height!=null&&Number(actual.height)!==height)mismatches.push('height')
       if(mismatches.length)return fail('verification-failed','live chart readback mismatch',{beforeCount:before,afterCount:after.length,actual:actual,mismatches:mismatches})
@@ -56,12 +58,24 @@ function chartCommand(spec) {
       if(spec.name!=null){for(var k=0;k<charts.length;k++)if(String(safe(charts[k],'GetName'))===String(spec.name)){target=charts[k];index=k;break}}
       else if(Number.isInteger(index)&&index>=0&&index<charts.length)target=charts[index]
       if(!target)return fail('invalid-operation','chart target not found',{count:charts.length})
-      if(!has(target,'Delete'))return fail('unsupported','ApiChart.Delete is unavailable')
-      var deleted=describe(target,index); target.Delete(); var remaining=chartsOf(sheet)
+      var deleted=describe(target,index), deleteTarget=target, deleteVia='chart'
+      if(!has(deleteTarget,'Delete')){
+        var drawings=drawingsOf(sheet), drawing=null
+        if(drawings!==null){
+          for(var d=0;d<drawings.length;d++){
+            var dn=safe(drawings[d],'GetName'), dc=safe(drawings[d],'GetClassType')
+            if(spec.name!=null&&String(dn)===String(spec.name)){drawing=drawings[d];break}
+            if(spec.name==null&&String(dc)==='chart'&&d===index){drawing=drawings[d];break}
+          }
+        }
+        if(!drawing||!has(drawing,'Delete'))return fail('unsupported','chart deletion is unavailable on ApiChart and matching ApiDrawing')
+        deleteTarget=drawing; deleteVia='drawing'
+      }
+      deleteTarget.Delete(); var remaining=chartsOf(sheet)
       if(remaining===null)return fail('unsupported','chart readback unavailable after delete')
-      if(remaining.length!==charts.length-1)return fail('verification-failed','chart count did not decrease after delete',{beforeCount:charts.length,afterCount:remaining.length})
+      if(remaining.length!==charts.length-1)return fail('verification-failed','chart count did not decrease after delete',{beforeCount:charts.length,afterCount:remaining.length,deleteVia:deleteVia})
       if(spec.name!=null){for(var m=0;m<remaining.length;m++)if(String(safe(remaining[m],'GetName'))===String(spec.name))return fail('verification-failed','named chart still exists after delete')}
-      return {ok:true,outcome:'ok',source:'live-coedit-editor',operation:spec.type,sheet:spec.sheet,deleted:deleted,beforeCount:charts.length,afterCount:remaining.length,verification:{status:'PASS',expectedCount:charts.length-1,actualCount:remaining.length}}
+      return {ok:true,outcome:'ok',source:'live-coedit-editor',operation:spec.type,sheet:spec.sheet,deleted:deleted,deleteVia:deleteVia,beforeCount:charts.length,afterCount:remaining.length,verification:{status:'PASS',expectedCount:charts.length-1,actualCount:remaining.length}}
     }
     return fail('invalid-operation','unknown chart operation: '+spec.type)
   }catch(err){return fail('chart-error',String(err&&err.message?err.message:err))}
