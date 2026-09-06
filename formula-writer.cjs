@@ -40,10 +40,6 @@ function formulaWriterCommand(sheetName, rangeAddress, formulas, maxCells) {
         var address=colLabel(parsed.start.column+c)+(parsed.start.row+r)
         var cell=null; try{cell=sheet.GetRange(address)}catch(_){}
         if(!cell)return fail('range-not-found','a target cell could not be resolved',{cell:address})
-        // SetFormula is paid-edition-only in current ONLYOFFICE Docs. The measured live runtime
-        // exposes GetFormula but not SetFormula; SetValue accepts formula strings beginning with
-        // '=' and creates a real formula cell. Prefer SetFormula where present, otherwise use the
-        // live-compatible SetValue path. Same-session read-back below remains acceptance authority.
         var method=has(cell,'SetFormula')?'SetFormula':(has(cell,'SetValue')?'SetValue':null)
         if(!method)return fail('unsupported','neither ApiRange.SetFormula nor ApiRange.SetValue is available',{cell:address})
         try{cell[method](f);written++; if(writer===null)writer=method; else if(writer!==method)writer='mixed'}catch(err){return fail('write-error',String(err&&err.message?err.message:err),{cell:address,writer:method})}
@@ -66,6 +62,40 @@ async function writeFormulaInFrame(frame, apiHely, {sheet,range,formulas,maxCell
   }),{u:apiHely,timeout:callbackTimeoutMs,commandBody:body})
 }
 
+// ONLYOFFICE may canonicalize a formula returned by GetFormula(): measured examples include
+// removing unnecessary single quotes around a simple sheet name and inserting whitespace after
+// '='. Verification therefore compares a conservative canonical form, not byte identity.
+// Whitespace inside Excel string literals is preserved. Single-quoted sheet names are unquoted
+// only when their decoded name is a simple identifier, where quoting is syntactically optional.
+function canonicalizeFormula(formula) {
+  if (typeof formula !== 'string') return null
+  let out='', i=0, inString=false
+  while(i<formula.length){
+    const ch=formula[i]
+    if(ch==='"'){
+      out+=ch
+      if(inString && formula[i+1]==='"'){out+='"';i+=2;continue}
+      inString=!inString;i++;continue
+    }
+    if(!inString && /\s/.test(ch)){i++;continue}
+    if(!inString && ch==="'"){
+      let j=i+1,name='',closed=false
+      while(j<formula.length){
+        if(formula[j]==="'"){
+          if(formula[j+1]==="'"){name+="'";j+=2;continue}
+          closed=true;break
+        }
+        name+=formula[j++]
+      }
+      if(closed && formula[j+1]==='!' && /^[A-Za-z_][A-Za-z0-9_.]*$/.test(name)){
+        out+=name+'!';i=j+2;continue
+      }
+    }
+    out+=ch;i++
+  }
+  return out
+}
+
 function verifyFormulaMatrix(readBack, formulas) {
   if(!readBack || !readBack.ok || !Array.isArray(readBack.cells)) return {ok:false,outcome:'verification-unavailable',error:'live range read-back did not return a verifiable cell matrix'}
   if(readBack.source !== LIVE_SOURCE) return {ok:false,outcome:'verification-unavailable',error:'verification source is not the live co-edit editor'}
@@ -75,7 +105,9 @@ function verifyFormulaMatrix(readBack, formulas) {
     const actual=cell&&typeof cell.formula==='string'?cell.formula:null
     const status=cell?(cell.formulaStatus || cell.dataType || null):null
     const provenFormula=cell && (cell.formulaStatus ? cell.formulaStatus==='formula' : cell.dataType==='formula')
-    if(!provenFormula || actual!==formulas[r][c]) mismatches.push({row:r+1,column:c+1,expected:formulas[r][c],actual,status})
+    const expectedCanonical=canonicalizeFormula(formulas[r][c])
+    const actualCanonical=canonicalizeFormula(actual)
+    if(!provenFormula || actualCanonical!==expectedCanonical) mismatches.push({row:r+1,column:c+1,expected:formulas[r][c],actual,status,expectedCanonical,actualCanonical})
   }
   return mismatches.length?{ok:false,outcome:'verification-mismatch',mismatches}:{ok:true,outcome:'verified'}
 }
@@ -105,4 +137,4 @@ async function writeFormulaLive({url,user,pass,fileId,sheet,range,formulas,loadP
   } finally { await browser.close().catch(()=>{}) }
 }
 
-module.exports={validateFormulaMatrix,formulaWriterCommand,writeFormulaInFrame,verifyFormulaMatrix,verifyFormulaRangeInFrame,writeFormulaLive}
+module.exports={validateFormulaMatrix,formulaWriterCommand,writeFormulaInFrame,canonicalizeFormula,verifyFormulaMatrix,verifyFormulaRangeInFrame,writeFormulaLive}
