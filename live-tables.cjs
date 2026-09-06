@@ -47,7 +47,7 @@ function tableCommand(spec) {
 
     if (spec.type === 'table.inspect') {
       var tables = listTables(sheet)
-      if (tables == null) return fail('unsupported', 'ApiWorksheet.GetListObjects is unavailable', { sheet: spec.sheet })
+      if (tables == null) return { ok: false, outcome: 'unsupported', source: 'live-coedit-editor', error: 'ApiWorksheet.GetListObjects is unavailable', sheet: spec.sheet, verification: unknown() }
       return { ok: true, outcome: 'ok', source: 'live-coedit-editor', operation: spec.type, sheet: spec.sheet, tables, verification: { status: 'PASS', actual: tables } }
     }
 
