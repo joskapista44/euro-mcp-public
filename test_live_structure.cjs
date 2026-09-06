@@ -32,15 +32,27 @@ function makeSheet(name, state) {
   }
 }
 
-function withApi(names, fn) {
+function makeApi(names) {
   const state = { order: names.slice(), merged: {} }
   const sheets = {}
   names.forEach((n) => { sheets[n] = makeSheet(n, state) })
-  global.Api = {
+  const api = {
     GetSheet(name) { return sheets[name] || null },
     GetSheets() { return state.order.map((n) => sheets[n]) },
   }
-  try { fn(state, sheets) } finally { delete global.Api }
+  return { state, sheets, api }
+}
+
+function withApi(names, fn) {
+  const env = makeApi(names)
+  global.Api = env.api
+  try { fn(env.state, env.sheets) } finally { delete global.Api }
+}
+
+function runSerialized(names, spec) {
+  const env = makeApi(names)
+  const command = new Function('Api', `return (${structureCommand.toString()})(${JSON.stringify(spec)});`)
+  return { result: command(env.api), state: env.state, sheets: env.sheets }
 }
 
 withApi(['A', 'B', 'C'], (state) => {
@@ -59,6 +71,16 @@ withApi(['A', 'B', 'C'], (state) => {
   assert.equal(movedAfter.verification.status, 'PASS')
   assert.deepEqual(state.order, ['A', 'B', 'C'])
 })
+
+// The real editor executes structureCommand after toString()/new Function(), without module
+// closures. This catches accidental references to outer constants such as LIVE_SOURCE.
+{
+  const serialized = runSerialized(['A', 'B', 'C'], { type: 'sheet.move', sheet: 'C', referenceSheet: 'A', position: 'before' })
+  assert.equal(serialized.result.ok, true)
+  assert.equal(serialized.result.source, 'live-coedit-editor')
+  assert.equal(serialized.result.verification.status, 'PASS')
+  assert.deepEqual(serialized.state.order, ['C', 'A', 'B'])
+}
 
 withApi(['Sheet1'], () => {
   const merged = structureCommand({ type: 'range.merge', sheet: 'Sheet1', range: 'C3:D4' })
