@@ -54,7 +54,7 @@ function structureCommand(spec) {
     if (spec.type === 'sheet.inspect') {
       var order = sheetNames()
       if (!order) return fail('unsupported', 'Api.GetSheets/GetName is unavailable')
-      return { ok: true, outcome: 'ok', source: LIVE_SOURCE, order, verification: { status: 'PASS', actual: order } }
+      return { ok: true, outcome: 'ok', source: 'live-coedit-editor', order, verification: { status: 'PASS', actual: order } }
     }
 
     if (spec.type === 'sheet.move') {
@@ -70,11 +70,11 @@ function structureCommand(spec) {
         else moving.Move(null, reference)
       } catch (err) { return fail('operation-error', String(err && err.message ? err.message : err)) }
       var afterOrder = sheetNames()
-      if (!afterOrder) return { ok: true, outcome: 'ok', source: LIVE_SOURCE, operation: spec.type, sheet: spec.sheet, referenceSheet: spec.referenceSheet, position: spec.position, beforeOrder, verification: unknown({ expected: spec.position + ' ' + spec.referenceSheet }) }
+      if (!afterOrder) return { ok: true, outcome: 'ok', source: 'live-coedit-editor', operation: spec.type, sheet: spec.sheet, referenceSheet: spec.referenceSheet, position: spec.position, beforeOrder, verification: unknown({ expected: spec.position + ' ' + spec.referenceSheet }) }
       var a = afterOrder.indexOf(spec.sheet), b = afterOrder.indexOf(spec.referenceSheet)
       var pass = a >= 0 && b >= 0 && (spec.position === 'before' ? a + 1 === b : b + 1 === a)
       if (!pass) return fail('verification-failed', 'sheet order does not match requested move', { beforeOrder, afterOrder, expected: { sheet: spec.sheet, position: spec.position, referenceSheet: spec.referenceSheet } })
-      return { ok: true, outcome: 'ok', source: LIVE_SOURCE, operation: spec.type, sheet: spec.sheet, referenceSheet: spec.referenceSheet, position: spec.position, beforeOrder, afterOrder, verification: { status: 'PASS', expected: { sheet: spec.sheet, position: spec.position, referenceSheet: spec.referenceSheet }, actual: afterOrder } }
+      return { ok: true, outcome: 'ok', source: 'live-coedit-editor', operation: spec.type, sheet: spec.sheet, referenceSheet: spec.referenceSheet, position: spec.position, beforeOrder, afterOrder, verification: { status: 'PASS', expected: { sheet: spec.sheet, position: spec.position, referenceSheet: spec.referenceSheet }, actual: afterOrder } }
     }
 
     if (spec.type === 'range.merge' || spec.type === 'range.unmerge') {
@@ -88,11 +88,11 @@ function structureCommand(spec) {
       if (mutation === false) return fail('operation-error', 'ApiRange.' + method + ' returned false', { operation: spec.type })
 
       var actualArea = mergeAreaAddress(rr.range)
-      if (actualArea == null) return { ok: true, outcome: 'ok', source: LIVE_SOURCE, operation: spec.type, sheet: spec.sheet, range: spec.range, verification: unknown({ expected: spec.type === 'range.merge' ? normAddress(spec.range) : firstCellAddress(spec.range) }) }
+      if (actualArea == null) return { ok: true, outcome: 'ok', source: 'live-coedit-editor', operation: spec.type, sheet: spec.sheet, range: spec.range, verification: unknown({ expected: spec.type === 'range.merge' ? normAddress(spec.range) : firstCellAddress(spec.range) }) }
       var expectedArea = spec.type === 'range.merge' ? normAddress(spec.range) : firstCellAddress(spec.range)
       var actualNorm = normAddress(actualArea)
       if (actualNorm !== expectedArea) return fail('verification-failed', 'merge area does not match requested postcondition', { operation: spec.type, expected: expectedArea, actual: actualNorm })
-      return { ok: true, outcome: 'ok', source: LIVE_SOURCE, operation: spec.type, sheet: spec.sheet, range: spec.range, verification: { status: 'PASS', expected: expectedArea, actual: actualNorm } }
+      return { ok: true, outcome: 'ok', source: 'live-coedit-editor', operation: spec.type, sheet: spec.sheet, range: spec.range, verification: { status: 'PASS', expected: expectedArea, actual: actualNorm } }
     }
 
     return fail('invalid-operation', 'unknown structure operation: ' + spec.type)
