@@ -62,11 +62,6 @@ async function writeFormulaInFrame(frame, apiHely, {sheet,range,formulas,maxCell
   }),{u:apiHely,timeout:callbackTimeoutMs,commandBody:body})
 }
 
-// ONLYOFFICE may canonicalize a formula returned by GetFormula(): measured examples include
-// removing unnecessary single quotes around a simple sheet name and inserting whitespace after
-// '='. Verification therefore compares a conservative canonical form, not byte identity.
-// Whitespace inside Excel string literals is preserved. Single-quoted sheet names are unquoted
-// only when their decoded name is a simple identifier, where quoting is syntactically optional.
 function canonicalizeFormula(formula) {
   if (typeof formula !== 'string') return null
   let out='', i=0, inString=false
@@ -87,8 +82,10 @@ function canonicalizeFormula(formula) {
         }
         name+=formula[j++]
       }
-      if(closed && formula[j+1]==='!' && /^[A-Za-z_][A-Za-z0-9_.]*$/.test(name)){
-        out+=name+'!';i=j+2;continue
+      if(closed && formula[j+1]==='!'){
+        if(/^[A-Za-z_][A-Za-z0-9_.]*$/.test(name)) out+=name+'!'
+        else out+=formula.slice(i,j+2)
+        i=j+2;continue
       }
     }
     out+=ch;i++
