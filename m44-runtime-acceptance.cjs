@@ -41,6 +41,12 @@ function formulaIntegrity(read, renamedSheet, expectedValue) {
   }
 }
 
+function moveChangedOrder(result) {
+  if (!result || !result.ok || !result.verification || result.verification.status !== 'PASS') return false
+  if (!Array.isArray(result.beforeOrder) || !Array.isArray(result.afterOrder)) return false
+  return result.beforeOrder.join('\u0000') !== result.afterOrder.join('\u0000')
+}
+
 async function runM44AcceptanceInFrame(frame, apiHely, options = {}) {
   const suffix = options.suffix || String(Date.now()).slice(-8)
   const sourceSheet = options.sourceSheet || `M44S_${suffix}`
@@ -108,13 +114,33 @@ async function runM44AcceptanceInFrame(frame, apiHely, options = {}) {
     steps.push({ name: 'formula-after-rename', status: renamedVerification.status, observation: renamedRead, verification: renamedVerification })
     if (renamedVerification.status !== 'PASS') stop()
 
-    const move = await structure('sheet-move-before-calc', { type: 'sheet.move', sheet: renamedSheet, referenceSheet: calcSheet, position: 'before' })
-    if (!move || statusOf(move) !== 'PASS') stop()
+    // Source and calc are created consecutively, so source is already immediately before calc.
+    // First move source after calc, then move it back before calc. Both moves must change the
+    // live sheet order; this proves Move itself rather than merely accepting an existing order.
+    const moveAfter = await structure('sheet-move-after-calc', { type: 'sheet.move', sheet: renamedSheet, referenceSheet: calcSheet, position: 'after' })
+    if (!moveAfter || statusOf(moveAfter) !== 'PASS' || !moveChangedOrder(moveAfter)) {
+      steps.push({ name: 'sheet-move-after-calc-changed-order', status: 'FAIL', verification: { expected: 'beforeOrder differs from afterOrder', actual: moveAfter ? { beforeOrder: moveAfter.beforeOrder, afterOrder: moveAfter.afterOrder } : null } })
+      stop()
+    }
+    steps.push({ name: 'sheet-move-after-calc-changed-order', status: 'PASS', verification: { expected: 'beforeOrder differs from afterOrder', actual: { beforeOrder: moveAfter.beforeOrder, afterOrder: moveAfter.afterOrder } } })
+
+    await frame.waitForTimeout(250)
+    const afterMoveRead = await readRangeInFrame(frame, apiHely, { sheet: calcSheet, range: calcCell, maxCells: 4, callbackTimeoutMs: timeoutMs })
+    const afterMoveVerification = formulaIntegrity(afterMoveRead, renamedSheet, expectedValue)
+    steps.push({ name: 'formula-after-move-after', status: afterMoveVerification.status, observation: afterMoveRead, verification: afterMoveVerification })
+    if (afterMoveVerification.status !== 'PASS') stop()
+
+    const moveBefore = await structure('sheet-move-before-calc', { type: 'sheet.move', sheet: renamedSheet, referenceSheet: calcSheet, position: 'before' })
+    if (!moveBefore || statusOf(moveBefore) !== 'PASS' || !moveChangedOrder(moveBefore)) {
+      steps.push({ name: 'sheet-move-before-calc-changed-order', status: 'FAIL', verification: { expected: 'beforeOrder differs from afterOrder', actual: moveBefore ? { beforeOrder: moveBefore.beforeOrder, afterOrder: moveBefore.afterOrder } : null } })
+      stop()
+    }
+    steps.push({ name: 'sheet-move-before-calc-changed-order', status: 'PASS', verification: { expected: 'beforeOrder differs from afterOrder', actual: { beforeOrder: moveBefore.beforeOrder, afterOrder: moveBefore.afterOrder } } })
 
     await frame.waitForTimeout(250)
     const movedRead = await readRangeInFrame(frame, apiHely, { sheet: calcSheet, range: calcCell, maxCells: 4, callbackTimeoutMs: timeoutMs })
     const movedVerification = formulaIntegrity(movedRead, renamedSheet, expectedValue)
-    steps.push({ name: 'formula-after-move', status: movedVerification.status, observation: movedRead, verification: movedVerification })
+    steps.push({ name: 'formula-after-move-before', status: movedVerification.status, observation: movedRead, verification: movedVerification })
     if (movedVerification.status !== 'PASS') stop()
 
     await structure('range-merge', { type: 'range.merge', sheet: calcSheet, range: mergeRange })
@@ -174,4 +200,4 @@ async function runM44AcceptanceLive({ url, user, pass, fileId, loadPlaywright, o
   } finally { await browser.close().catch(() => {}) }
 }
 
-module.exports = { statusOf, overall, firstCell, formulaIntegrity, runM44AcceptanceInFrame, runM44AcceptanceLive }
+module.exports = { statusOf, overall, firstCell, formulaIntegrity, moveChangedOrder, runM44AcceptanceInFrame, runM44AcceptanceLive }
