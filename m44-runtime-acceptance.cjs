@@ -6,6 +6,8 @@ const { writeBulkInFrame } = require('./bulk-writer.cjs')
 const { writeCrossSheetInFrame } = require('./cross-sheet-formulas.cjs')
 const { readRangeInFrame } = require('./range-reader.cjs')
 
+const STOP = Symbol('M44_STOP')
+
 function statusOf(result) {
   if (!result) return 'FAIL'
   if (result.verification && result.verification.status) return result.verification.status
@@ -67,6 +69,7 @@ async function runM44AcceptanceInFrame(frame, apiHely, options = {}) {
     const result = await runOperationInFrame(frame, apiHely, { type: 'sheet.delete', sheet }, timeoutMs)
     cleanup.push({ sheet, status: result && result.ok ? 'PASS' : 'FAIL', result })
   }
+  function stop() { throw STOP }
 
   let sourceCurrent = sourceSheet
   let sourceCreated = false
@@ -74,72 +77,72 @@ async function runM44AcceptanceInFrame(frame, apiHely, options = {}) {
   try {
     const createSource = await op('sheet-create-source', { type: 'sheet.create', name: sourceSheet })
     sourceCreated = !!(createSource && createSource.ok)
-    if (!sourceCreated) return finish()
+    if (!sourceCreated) stop()
 
     const createCalc = await op('sheet-create-calc', { type: 'sheet.create', name: calcSheet })
     calcCreated = !!(createCalc && createCalc.ok)
-    if (!calcCreated) return finish()
+    if (!calcCreated) stop()
 
     const seed = await writeBulkInFrame(frame, apiHely, { sheet: sourceSheet, range: sourceCell, values: [[marker]], callbackTimeoutMs: timeoutMs })
     steps.push({ name: 'source-marker-write', status: seed && seed.ok ? 'PASS' : 'FAIL', result: seed })
-    if (!seed || !seed.ok) return finish()
+    if (!seed || !seed.ok) stop()
 
     const formula = `='${sourceSheet.replace(/'/g, "''")}'!${sourceCell}*2`
     const written = await writeCrossSheetInFrame(frame, apiHely, { sheet: calcSheet, range: calcCell, formulas: [[formula]], maxCells: 4, callbackTimeoutMs: timeoutMs })
     steps.push({ name: 'cross-sheet-formula-write', status: written && written.ok && written.verified ? 'PASS' : 'FAIL', result: written })
-    if (!written || !written.ok || !written.verified) return finish()
+    if (!written || !written.ok || !written.verified) stop()
 
     const beforeRenameRead = await readRangeInFrame(frame, apiHely, { sheet: calcSheet, range: calcCell, maxCells: 4, callbackTimeoutMs: timeoutMs })
     const beforeCell = firstCell(beforeRenameRead)
     const beforePass = !!beforeCell && !/#REF!/i.test(beforeCell.formula || '') && (Number(beforeCell.rawValue) === expectedValue || Number(beforeCell.displayText) === expectedValue)
     steps.push({ name: 'formula-before-rename', status: beforePass ? 'PASS' : 'FAIL', observation: beforeRenameRead })
-    if (!beforePass) return finish()
+    if (!beforePass) stop()
 
     const rename = await op('sheet-rename-source', { type: 'sheet.rename', sheet: sourceSheet, name: renamedSheet })
-    if (!rename || !rename.ok) return finish()
+    if (!rename || !rename.ok) stop()
     sourceCurrent = renamedSheet
 
     await frame.waitForTimeout(250)
     const renamedRead = await readRangeInFrame(frame, apiHely, { sheet: calcSheet, range: calcCell, maxCells: 4, callbackTimeoutMs: timeoutMs })
     const renamedVerification = formulaIntegrity(renamedRead, renamedSheet, expectedValue)
     steps.push({ name: 'formula-after-rename', status: renamedVerification.status, observation: renamedRead, verification: renamedVerification })
-    if (renamedVerification.status !== 'PASS') return finish()
+    if (renamedVerification.status !== 'PASS') stop()
 
     const move = await structure('sheet-move-before-calc', { type: 'sheet.move', sheet: renamedSheet, referenceSheet: calcSheet, position: 'before' })
-    if (!move || statusOf(move) !== 'PASS') return finish()
+    if (!move || statusOf(move) !== 'PASS') stop()
 
     await frame.waitForTimeout(250)
     const movedRead = await readRangeInFrame(frame, apiHely, { sheet: calcSheet, range: calcCell, maxCells: 4, callbackTimeoutMs: timeoutMs })
     const movedVerification = formulaIntegrity(movedRead, renamedSheet, expectedValue)
     steps.push({ name: 'formula-after-move', status: movedVerification.status, observation: movedRead, verification: movedVerification })
-    if (movedVerification.status !== 'PASS') return finish()
+    if (movedVerification.status !== 'PASS') stop()
 
     await structure('range-merge', { type: 'range.merge', sheet: calcSheet, range: mergeRange })
     await structure('range-unmerge', { type: 'range.unmerge', sheet: calcSheet, range: mergeRange })
+  } catch (err) {
+    if (err !== STOP) {
+      steps.push({ name: 'acceptance-exception', status: 'FAIL', error: String(err && err.message ? err.message : err) })
+    }
   } finally {
     if (calcCreated) await cleanupSheet(calcSheet)
     if (sourceCreated) await cleanupSheet(sourceCurrent)
   }
 
-  return finish()
-
-  function finish() {
-    const testOutcome = overall(steps)
-    const cleanupOutcome = cleanup.length && cleanup.every((x) => x.status === 'PASS') ? 'PASS' : (cleanup.length ? 'FAIL' : 'UNKNOWN')
-    return {
-      milestone: 'M4.4',
-      source: 'live-coedit-editor',
-      outcome: testOutcome === 'PASS' && cleanupOutcome === 'PASS' ? 'PASS' : (testOutcome === 'FAIL' || cleanupOutcome === 'FAIL' ? 'FAIL' : 'UNKNOWN'),
-      testOutcome,
-      cleanupOutcome,
-      humanObservationRequired: false,
-      sheets: { sourceSheet, renamedSheet, calcSheet },
-      marker,
-      expectedValue,
-      mergeRange,
-      steps,
-      cleanup,
-    }
+  const testOutcome = overall(steps)
+  const cleanupOutcome = cleanup.length && cleanup.every((x) => x.status === 'PASS') ? 'PASS' : (cleanup.length ? 'FAIL' : 'UNKNOWN')
+  return {
+    milestone: 'M4.4',
+    source: 'live-coedit-editor',
+    outcome: testOutcome === 'PASS' && cleanupOutcome === 'PASS' ? 'PASS' : (testOutcome === 'FAIL' || cleanupOutcome === 'FAIL' ? 'FAIL' : 'UNKNOWN'),
+    testOutcome,
+    cleanupOutcome,
+    humanObservationRequired: false,
+    sheets: { sourceSheet, renamedSheet, calcSheet },
+    marker,
+    expectedValue,
+    mergeRange,
+    steps,
+    cleanup,
   }
 }
 
