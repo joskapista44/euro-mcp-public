@@ -1,5 +1,7 @@
 'use strict'
 
+const LIVE_SOURCE='live-coedit-editor'
+
 function chartSeriesCommand(spec){
   function has(o,n){return !!o&&typeof o[n]==='function'}
   function fail(outcome,error,extra){var x={ok:false,outcome:outcome,source:'live-coedit-editor',error:error};if(extra)for(var k in extra)x[k]=extra[k];return x}
@@ -17,12 +19,10 @@ function chartSeriesCommand(spec){
     var found=targetOf(charts,spec),chart=found.target
     if(!chart)return fail('invalid-operation','chart target not found',{count:charts.length})
     var series=seriesOf(chart);if(series===null)return fail('unsupported','ApiChart.GetAllSeries is unavailable')
-
     if(spec.type==='chart.series.inspect'){
       var inventory=[];for(var i=0;i<series.length;i++)inventory.push(describeSeries(series[i],i))
       return {ok:true,outcome:'ok',source:'live-coedit-editor',operation:spec.type,sheet:spec.sheet,chartIndex:found.index,count:inventory.length,series:inventory,verification:{status:'PASS',actual:inventory}}
     }
-
     if(spec.type==='chart.series.add'){
       if(!has(chart,'AddSeria'))return fail('unsupported','ApiChart.AddSeria is unavailable')
       if(!spec.nameRange||!spec.valuesRange)return fail('invalid-operation','nameRange and valuesRange are required')
@@ -32,7 +32,6 @@ function chartSeriesCommand(spec){
       if(after.length!==before+1)return fail('verification-failed','series count did not increase after AddSeria',{beforeCount:before,afterCount:after.length})
       return {ok:true,outcome:'ok',source:'live-coedit-editor',operation:spec.type,sheet:spec.sheet,beforeCount:before,afterCount:after.length,actual:describeSeries(after[after.length-1],after.length-1),verification:{status:'PASS',expectedCount:before+1,actualCount:after.length}}
     }
-
     if(spec.type==='chart.series.remove'){
       var ri=Number(spec.seriesIndex)
       if(!Number.isInteger(ri)||ri<0||ri>=series.length)return fail('invalid-operation','valid seriesIndex is required',{seriesCount:series.length})
@@ -43,7 +42,6 @@ function chartSeriesCommand(spec){
       if(remaining.length!==beforeRemove-1)return fail('verification-failed','series count did not decrease after RemoveSeria',{beforeCount:beforeRemove,afterCount:remaining.length})
       return {ok:true,outcome:'ok',source:'live-coedit-editor',operation:spec.type,sheet:spec.sheet,removed:removed,beforeCount:beforeRemove,afterCount:remaining.length,verification:{status:'PASS',expectedCount:beforeRemove-1,actualCount:remaining.length}}
     }
-
     if(spec.type==='chart.series.changeType'){
       var si=Number(spec.seriesIndex)
       if(!Number.isInteger(si)||si<0||si>=series.length||!spec.chartType)return fail('invalid-operation','valid seriesIndex and chartType are required',{seriesCount:series.length})
@@ -58,7 +56,6 @@ function chartSeriesCommand(spec){
       if(String(afterType)!==String(spec.chartType))return fail('verification-failed','series chart type readback mismatch',{beforeType:beforeType,actualType:afterType,expectedType:spec.chartType})
       return {ok:true,outcome:'ok',source:'live-coedit-editor',operation:spec.type,sheet:spec.sheet,seriesIndex:si,beforeType:beforeType,actualType:afterType,verification:{status:'PASS',expectedType:String(spec.chartType),actualType:String(afterType)}}
     }
-
     return fail('invalid-operation','unknown chart series operation: '+spec.type)
   }catch(err){return fail('chart-series-error',String(err&&err.message?err.message:err))}
 }
@@ -68,4 +65,22 @@ async function runChartSeriesInFrame(frame,apiHely,spec,timeoutMs=15000){
   return frame.evaluate(({u,body,timeout})=>new Promise(resolve=>{const editor=u==='window.editor'?window.editor:(window.Asc||{}).editor;let done=false;const finish=v=>{if(!done){done=true;resolve(v)}};if(!editor||typeof editor.callCommand!=='function')return finish({ok:false,outcome:'nincs-api',source:'live-coedit-editor',error:'callCommand is unavailable'});try{editor.callCommand(new Function(body),false,v=>finish(v===undefined?{ok:false,outcome:'empty-callback',source:'live-coedit-editor'}:v))}catch(err){finish({ok:false,outcome:'callcommand-error',source:'live-coedit-editor',error:String(err&&err.message?err.message:err)})}setTimeout(()=>finish({ok:false,outcome:'callback-timeout',source:'live-coedit-editor'}),timeout)}),{u:apiHely,body,timeout:timeoutMs})
 }
 
-module.exports={chartSeriesCommand,runChartSeriesInFrame}
+async function runChartSeriesLive({url,user,pass,fileId,spec,loadPlaywright,timeoutMs=60000,callbackTimeoutMs=15000}){
+  const loaded=loadPlaywright()
+  if(!loaded.ok)return {ok:false,outcome:'nem-mert',source:LIVE_SOURCE,error:loaded.indok}
+  const {chromium}=loaded.pw,browser=await chromium.launch()
+  try{
+    const ctx=await browser.newContext({viewport:{width:1400,height:900}}),page=await ctx.newPage()
+    await page.goto(`${url}/login`,{waitUntil:'domcontentloaded',timeout:timeoutMs});await page.fill('#user',user);await page.fill('#password',pass)
+    await Promise.all([page.waitForNavigation({waitUntil:'domcontentloaded',timeout:timeoutMs}).catch(()=>null),page.click('button[type=submit], input[type=submit]')]);await page.waitForTimeout(2500)
+    if(/\/login/.test(page.url()))return {ok:false,outcome:'auth',source:LIVE_SOURCE,error:'login failed'}
+    await page.goto(`${url}/index.php/apps/eurooffice/${fileId}`,{waitUntil:'domcontentloaded',timeout:timeoutMs});await page.waitForTimeout(22000)
+    const frame=page.frames().find(f=>/spreadsheeteditor/.test(f.url()));if(!frame)return {ok:false,outcome:'nem-nyilt-meg',source:LIVE_SOURCE,error:'spreadsheeteditor frame not found'}
+    const apiHely=await frame.evaluate(()=>((window.Asc||{}).editor&&typeof window.Asc.editor.callCommand==='function')?'window.Asc.editor':(window.editor&&typeof window.editor.callCommand==='function')?'window.editor':null)
+    if(!apiHely)return {ok:false,outcome:'nincs-api',source:LIVE_SOURCE,error:'callCommand is unavailable'}
+    const result=await runChartSeriesInFrame(frame,apiHely,spec,callbackTimeoutMs)
+    return {...result,editor:'spreadsheeteditor',apiHely}
+  }finally{await browser.close().catch(()=>{})}
+}
+
+module.exports={chartSeriesCommand,runChartSeriesInFrame,runChartSeriesLive}
