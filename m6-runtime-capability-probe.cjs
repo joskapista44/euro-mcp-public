@@ -42,10 +42,11 @@ function probeCommand(){
     if(!sh)return {ok:false,error:'worksheet unavailable'}
     var range=sh.GetRange?sh.GetRange('A1:C4'):null
     var af=sh.GetAutoFilter?safe(function(){return sh.GetAutoFilter()}):null
+    var validation=range&&range.GetValidation?safe(function(){return range.GetValidation()}):null
     var dns=Api.GetDefNames?safe(function(){return Api.GetDefNames()}):null
     var dn=(dns&&dns.length)?dns[0]:null
     var fp=sh.GetFreezePanes?safe(function(){return sh.GetFreezePanes()}):null
-    var apiMethods=methods(Api),sheetMethods=methods(sh),rangeMethods=methods(range),afMethods=methods(af),defNameMethods=methods(dn),freezeMethods=methods(fp)
+    var apiMethods=methods(Api),sheetMethods=methods(sh),rangeMethods=methods(range),afMethods=methods(af),validationMethods=methods(validation),defNameMethods=methods(dn),freezeMethods=methods(fp)
     var interesting=/Filter|Sort|Valid|DefName|Defined|Name|Freeze|Protect|Pivot|Hyperlink/i
     return {
       ok:true,
@@ -54,15 +55,16 @@ function probeCommand(){
         Api:{present:true,interesting:pick(apiMethods,interesting)},
         ApiWorksheet:{present:!!sh,interesting:pick(sheetMethods,interesting)},
         ApiRange:{present:!!range,interesting:pick(rangeMethods,interesting)},
-        ApiAutoFilter:{present:!!af,interesting:pick(afMethods,interesting)},
-        ApiDefName:{present:!!dn,interesting:pick(defNameMethods,interesting)},
+        ApiAutoFilter:{present:!!af,methods:afMethods},
+        ApiValidation:{present:!!validation,methods:validationMethods},
+        ApiDefName:{present:!!dn,methods:defNameMethods},
         ApiFreezePanes:{present:!!fp,interesting:pick(freezeMethods,interesting)}
       },
       candidates:{
         sort:{range:pick(rangeMethods,/Sort/i),worksheet:pick(sheetMethods,/Sort/i),autoFilter:pick(afMethods,/Sort/i)},
-        filter:{worksheet:pick(sheetMethods,/Filter/i),range:pick(rangeMethods,/Filter/i),autoFilter:pick(afMethods,/Filter/i)},
-        validation:{worksheet:pick(sheetMethods,/Valid/i),range:pick(rangeMethods,/Valid/i),api:pick(apiMethods,/Valid/i)},
-        definedNames:{api:pick(apiMethods,/DefName|DefinedName/i),worksheet:pick(sheetMethods,/DefName|DefinedName/i),object:pick(defNameMethods,/./)},
+        filter:{worksheet:pick(sheetMethods,/Filter/i),range:pick(rangeMethods,/Filter/i),autoFilter:pick(afMethods,/Filter|Criteria|Range|Column|Clear|Remove/i)},
+        validation:{worksheet:pick(sheetMethods,/Valid/i),range:pick(rangeMethods,/Valid/i),api:pick(apiMethods,/Valid/i),object:validationMethods},
+        definedNames:{api:pick(apiMethods,/DefName|DefinedName/i),worksheet:pick(sheetMethods,/DefName|DefinedName/i),object:defNameMethods},
         freeze:{api:pick(apiMethods,/Freeze/i),worksheet:pick(sheetMethods,/Freeze/i),object:pick(freezeMethods,/./)},
         protection:{api:pick(apiMethods,/Protect/i),worksheet:pick(sheetMethods,/Protect/i),range:pick(rangeMethods,/Protect|Locked/i)},
         pivot:{api:pick(apiMethods,/Pivot/i),worksheet:pick(sheetMethods,/Pivot/i),range:pick(rangeMethods,/Pivot/i)}
