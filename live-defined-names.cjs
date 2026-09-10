@@ -1,4 +1,79 @@
 'use strict'
-function definedNameCommand(spec){function safeGet(name){try{return typeof Api.GetDefName==='function'?Api.GetDefName(name):null}catch(_){return null}}function snap(o){return o?{name:typeof o.GetName==='function'?o.GetName():null,refersTo:typeof o.GetRefersTo==='function'?o.GetRefersTo():null}:null}try{var op=spec.operation,name=spec.name,obj,before,actual,ok;if(op==='definedName.inspect'){obj=safeGet(name);actual=snap(obj);return {ok:true,outcome:'ok',source:'live-coedit-editor',operation:op,verification:{status:'PASS',expected:'live-defined-name-state',actual:actual}}}if(op==='definedName.add'){if(typeof Api.AddDefName!=='function')throw new Error('Api.AddDefName unavailable');Api.AddDefName(name,spec.refersTo);actual=snap(safeGet(name));ok=!!actual&&actual.name===name&&actual.refersTo===spec.refersTo;return {ok:ok,outcome:ok?'ok':'verification-failed',source:'live-coedit-editor',operation:op,verification:{status:ok?'PASS':'FAIL',expected:{name:name,refersTo:spec.refersTo},actual:actual}}}obj=safeGet(name);if(!obj)return {ok:false,outcome:'not-found',source:'live-coedit-editor',operation:op,verification:{status:'FAIL',expected:name,actual:null}};before=snap(obj);if(op==='definedName.rename'){if(typeof obj.SetName!=='function')throw new Error('ApiDefName.SetName unavailable');obj.SetName(spec.newName);actual=snap(safeGet(spec.newName));ok=!!actual&&actual.name===spec.newName&&actual.refersTo===before.refersTo;return {ok:ok,outcome:ok?'ok':'verification-failed',source:'live-coedit-editor',operation:op,verification:{status:ok?'PASS':'FAIL',expected:{name:spec.newName,refersTo:before.refersTo},actual:actual}}if(op==='definedName.setRefersTo'){if(typeof obj.SetRefersTo!=='function')throw new Error('ApiDefName.SetRefersTo unavailable');obj.SetRefersTo(spec.refersTo);actual=snap(safeGet(name));ok=!!actual&&actual.name===name&&actual.refersTo===spec.refersTo;return {ok:ok,outcome:ok?'ok':'verification-failed',source:'live-coedit-editor',operation:op,verification:{status:ok?'PASS':'FAIL',expected:{name:name,refersTo:spec.refersTo},actual:actual}}if(op==='definedName.delete'){if(typeof obj.Delete!=='function')throw new Error('ApiDefName.Delete unavailable');obj.Delete();actual=snap(safeGet(name));ok=actual===null;return {ok:ok,outcome:ok?'ok':'verification-failed',source:'live-coedit-editor',operation:op,verification:{status:ok?'PASS':'FAIL',expected:'defined-name-absent',actual:actual}}return {ok:false,outcome:'unknown-operation',source:'live-coedit-editor',operation:op,verification:{status:'FAIL',expected:'known operation',actual:op}}}catch(e){return {ok:false,outcome:'error',source:'live-coedit-editor',operation:spec&&spec.operation,error:String(e&&e.message?e.message:e),verification:{status:'UNKNOWN'}}}}
-async function runDefinedNameInFrame(frame,apiHely,spec,timeoutMs=10000){const body=`return (${definedNameCommand.toString()})(${JSON.stringify(spec)});`;return frame.evaluate(({u,body,timeout})=>new Promise(resolve=>{const editor=u==='window.editor'?window.editor:(window.Asc||{}).editor;if(!editor||typeof editor.callCommand!=='function')return resolve({ok:false,outcome:'no-api',source:'live-coedit-editor',verification:{status:'UNKNOWN'}});let done=false;const finish=v=>{if(!done){done=true;resolve(v)}};try{editor.callCommand(new Function(body),false,finish)}catch(e){finish({ok:false,outcome:'callcommand-error',source:'live-coedit-editor',error:String(e),verification:{status:'UNKNOWN'}})}setTimeout(()=>finish({ok:false,outcome:'timeout',source:'live-coedit-editor',verification:{status:'UNKNOWN'}}),timeout)}),{u:apiHely,body,timeout:timeoutMs})}
-module.exports={definedNameCommand,runDefinedNameInFrame}
+
+function definedNameCommand(spec) {
+  function safeGet(name) {
+    try { return typeof Api.GetDefName === 'function' ? Api.GetDefName(name) : null } catch (_) { return null }
+  }
+  function snap(obj) {
+    return obj ? {
+      name: typeof obj.GetName === 'function' ? obj.GetName() : null,
+      refersTo: typeof obj.GetRefersTo === 'function' ? obj.GetRefersTo() : null,
+    } : null
+  }
+
+  try {
+    var op = spec.operation
+    var name = spec.name
+    var obj, before, actual, ok
+
+    if (op === 'definedName.inspect') {
+      actual = snap(safeGet(name))
+      return { ok: true, outcome: 'ok', source: 'live-coedit-editor', operation: op, verification: { status: 'PASS', expected: 'live-defined-name-state', actual: actual } }
+    }
+
+    if (op === 'definedName.add') {
+      if (typeof Api.AddDefName !== 'function') throw new Error('Api.AddDefName unavailable')
+      Api.AddDefName(name, spec.refersTo)
+      actual = snap(safeGet(name))
+      ok = !!actual && actual.name === name && actual.refersTo === spec.refersTo
+      return { ok: ok, outcome: ok ? 'ok' : 'verification-failed', source: 'live-coedit-editor', operation: op, verification: { status: ok ? 'PASS' : 'FAIL', expected: { name: name, refersTo: spec.refersTo }, actual: actual } }
+    }
+
+    obj = safeGet(name)
+    if (!obj) return { ok: false, outcome: 'not-found', source: 'live-coedit-editor', operation: op, verification: { status: 'FAIL', expected: name, actual: null } }
+    before = snap(obj)
+
+    if (op === 'definedName.rename') {
+      if (typeof obj.SetName !== 'function') throw new Error('ApiDefName.SetName unavailable')
+      obj.SetName(spec.newName)
+      actual = snap(safeGet(spec.newName))
+      ok = !!actual && actual.name === spec.newName && actual.refersTo === before.refersTo
+      return { ok: ok, outcome: ok ? 'ok' : 'verification-failed', source: 'live-coedit-editor', operation: op, verification: { status: ok ? 'PASS' : 'FAIL', expected: { name: spec.newName, refersTo: before.refersTo }, actual: actual } }
+    }
+
+    if (op === 'definedName.setRefersTo') {
+      if (typeof obj.SetRefersTo !== 'function') throw new Error('ApiDefName.SetRefersTo unavailable')
+      obj.SetRefersTo(spec.refersTo)
+      actual = snap(safeGet(name))
+      ok = !!actual && actual.name === name && actual.refersTo === spec.refersTo
+      return { ok: ok, outcome: ok ? 'ok' : 'verification-failed', source: 'live-coedit-editor', operation: op, verification: { status: ok ? 'PASS' : 'FAIL', expected: { name: name, refersTo: spec.refersTo }, actual: actual } }
+    }
+
+    if (op === 'definedName.delete') {
+      if (typeof obj.Delete !== 'function') throw new Error('ApiDefName.Delete unavailable')
+      obj.Delete()
+      actual = snap(safeGet(name))
+      ok = actual === null
+      return { ok: ok, outcome: ok ? 'ok' : 'verification-failed', source: 'live-coedit-editor', operation: op, verification: { status: ok ? 'PASS' : 'FAIL', expected: 'defined-name-absent', actual: actual } }
+    }
+
+    return { ok: false, outcome: 'unknown-operation', source: 'live-coedit-editor', operation: op, verification: { status: 'FAIL', expected: 'known operation', actual: op } }
+  } catch (e) {
+    return { ok: false, outcome: 'error', source: 'live-coedit-editor', operation: spec && spec.operation, error: String(e && e.message ? e.message : e), verification: { status: 'UNKNOWN' } }
+  }
+}
+
+async function runDefinedNameInFrame(frame, apiHely, spec, timeoutMs = 10000) {
+  const body = `return (${definedNameCommand.toString()})(${JSON.stringify(spec)});`
+  return frame.evaluate(({ u, body, timeout }) => new Promise((resolve) => {
+    const editor = u === 'window.editor' ? window.editor : (window.Asc || {}).editor
+    if (!editor || typeof editor.callCommand !== 'function') return resolve({ ok: false, outcome: 'no-api', source: 'live-coedit-editor', verification: { status: 'UNKNOWN' } })
+    let done = false
+    const finish = (value) => { if (!done) { done = true; resolve(value) } }
+    try { editor.callCommand(new Function(body), false, finish) }
+    catch (e) { finish({ ok: false, outcome: 'callcommand-error', source: 'live-coedit-editor', error: String(e), verification: { status: 'UNKNOWN' } }) }
+    setTimeout(() => finish({ ok: false, outcome: 'timeout', source: 'live-coedit-editor', verification: { status: 'UNKNOWN' } }), timeout)
+  }), { u: apiHely, body, timeout: timeoutMs })
+}
+
+module.exports = { definedNameCommand, runDefinedNameInFrame }
