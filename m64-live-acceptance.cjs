@@ -55,15 +55,40 @@ async function main(){
 
   // Seed is fixture setup, not an accepted product operation. Refresh is explicitly
   // deferred until a machine-verifiable semantic refresh effect is implemented.
-  const required=steps.filter(x=>x.step!=='seed'&&x.step!=='refresh-deferred');
-  const statuses=required.map(x=>x.result&&x.result.verification&&x.result.verification.status);
+  // Keep the required product-operation set explicit so adding/removing a step cannot
+  // silently invalidate the milestone through a stale magic count.
+  const requiredStepNames=[
+    'create',
+    'inspect-after-create',
+    'add-fields',
+    'add-data-field',
+    'inspect-after-fields',
+    'style',
+    'rename',
+    'inspect-after-rename'
+  ];
+  const requiredByName=new Map(steps.map(x=>[x.step,x]));
+  const requiredSteps=requiredStepNames.map(step=>{
+    const entry=requiredByName.get(step);
+    const status=entry&&entry.result&&entry.result.verification&&entry.result.verification.status;
+    return {step,status:status||'MISSING'};
+  });
+  const unexpectedAcceptedSteps=steps
+    .filter(x=>!x.setupOnly&&x.step!=='refresh-deferred'&&!requiredStepNames.includes(x.step))
+    .map(x=>x.step);
   const seedStatus=seed&&seed.ok?'PASS':'FAIL';
   const refreshStatus=refresh&&refresh.verification&&refresh.verification.status;
-  const pass=seedStatus==='PASS'&&statuses.length===8&&statuses.every(x=>x==='PASS')&&refreshStatus==='UNKNOWN';
+  const pass=seedStatus==='PASS'&&requiredSteps.every(x=>x.status==='PASS')&&unexpectedAcceptedSteps.length===0&&refreshStatus==='UNKNOWN';
   console.log(JSON.stringify({
     milestone:'M6.4',source:'live-coedit-editor',humanObservationRequired:false,steps,
     outcome:pass?'PASS_WITH_REFRESH_DEFERRED':'FAIL',
-    verification:{status:pass?'PASS':'FAIL',seedStatus,operationStatuses:statuses,refreshStatus}
+    verification:{
+      status:pass?'PASS':'FAIL',
+      seedStatus,
+      requiredSteps,
+      unexpectedAcceptedSteps,
+      refreshStatus
+    }
   },null,2));
   if(!pass) process.exitCode=1;
  }finally{await browser.close()}
