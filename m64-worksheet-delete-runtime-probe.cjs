@@ -2,23 +2,9 @@
 const { chromium } = require(process.env.EURO_PLAYWRIGHT_PATH || '/home/user/marveen/node_modules/playwright');
 
 function worksheetDeleteProbeCommand() {
-  function publicMethods(obj) {
-    if (!obj) return [];
-    var out = [], p = obj;
-    while (p && p !== Object.prototype) {
-      Object.getOwnPropertyNames(p).forEach(function (name) {
-        try {
-          if (typeof obj[name] === 'function' && name !== 'constructor' && name[0] !== '_' && name.indexOf('private_') !== 0) out.push(name);
-        } catch (_) {}
-      });
-      p = Object.getPrototypeOf(p);
-    }
-    return Array.from(new Set(out)).sort();
-  }
-  function cleanupCandidates(methods) {
-    return methods.filter(function (name) {
-      return /(delete|remove|sheet|worksheet)/i.test(name);
-    });
+  function sheetNames() {
+    var sheets = Api.GetSheets();
+    return Array.isArray(sheets) ? sheets.map(function (s) { return s.GetName(); }) : [];
   }
   function safe(fn) {
     try { return fn(); }
@@ -26,37 +12,85 @@ function worksheetDeleteProbeCommand() {
   }
 
   try {
-    var active = Api.GetActiveSheet();
-    var apiMethods = publicMethods(Api);
-    var sheetMethods = publicMethods(active);
-    var result = {
-      ok: true,
+    var probeName = 'EURO_M64_DELETE_PROBE';
+    var before = sheetNames();
+    if (before.indexOf(probeName) !== -1) {
+      return {
+        ok: false,
+        source: 'live-coedit-editor',
+        kind: 'public-worksheet-delete-semantic-probe',
+        mutationAttempted: false,
+        verification: {
+          status: 'UNKNOWN',
+          expected: { probeSheetAbsentBeforeStart: true },
+          actual: { before: before, reason: 'probe sheet already exists; refusing destructive ambiguity' }
+        }
+      };
+    }
+
+    var created = Api.AddSheet(probeName);
+    var afterCreate = sheetNames();
+    var createVerified = afterCreate.indexOf(probeName) !== -1;
+    if (!createVerified) {
+      return {
+        ok: false,
+        source: 'live-coedit-editor',
+        kind: 'public-worksheet-delete-semantic-probe',
+        mutationAttempted: true,
+        verification: {
+          status: 'UNKNOWN',
+          expected: { presentAfterCreate: true },
+          actual: { before: before, afterCreate: afterCreate }
+        }
+      };
+    }
+
+    var target = Api.GetSheet(probeName) || created;
+    if (!target || typeof target.Delete !== 'function') {
+      return {
+        ok: false,
+        source: 'live-coedit-editor',
+        kind: 'public-worksheet-delete-semantic-probe',
+        mutationAttempted: true,
+        verification: {
+          status: 'UNKNOWN',
+          expected: { publicDeleteCallable: true },
+          actual: { afterCreate: afterCreate, publicDeleteCallable: false }
+        }
+      };
+    }
+
+    var deleteResult = safe(function () { target.Delete(); return true; });
+    var afterDelete = sheetNames();
+    var absentAfterDelete = afterDelete.indexOf(probeName) === -1;
+    var pass = deleteResult === true && absentAfterDelete;
+    return {
+      ok: pass,
       source: 'live-coedit-editor',
-      kind: 'public-worksheet-delete-capability-inventory',
-      activeSheetName: safe(function () { return active && typeof active.GetName === 'function' ? active.GetName() : null; }),
-      apiCleanupCandidates: cleanupCandidates(apiMethods),
-      worksheetCleanupCandidates: cleanupCandidates(sheetMethods),
-      apiMethods: apiMethods,
-      worksheetMethods: sheetMethods,
-      mutationAttempted: false,
+      kind: 'public-worksheet-delete-semantic-probe',
+      mutationAttempted: true,
+      method: 'ApiWorksheet.Delete',
+      before: before,
+      afterCreate: afterCreate,
+      afterDelete: afterDelete,
+      deleteResult: deleteResult,
       verification: {
-        status: 'UNKNOWN',
-        expected: 'discover a documented/public worksheet deletion method before attempting cleanup',
-        actual: 'capability inventory only; no worksheet deletion attempted'
+        status: pass ? 'PASS' : 'FAIL',
+        expected: { presentAfterCreate: true, absentAfterDelete: true },
+        actual: { presentAfterCreate: createVerified, absentAfterDelete: absentAfterDelete }
       }
     };
-    return result;
   } catch (e) {
     return {
       ok: false,
       source: 'live-coedit-editor',
-      kind: 'public-worksheet-delete-capability-inventory',
-      mutationAttempted: false,
+      kind: 'public-worksheet-delete-semantic-probe',
+      mutationAttempted: true,
       error: String(e && e.message ? e.message : e),
       verification: {
         status: 'UNKNOWN',
-        expected: 'public worksheet deletion capability inventory',
-        actual: 'probe failed before capability could be established'
+        expected: 'create isolated probe worksheet, delete it with public ApiWorksheet.Delete, read back absence via Api.GetSheets',
+        actual: 'probe raised before semantic verification completed'
       }
     };
   }
@@ -80,6 +114,7 @@ async function main() {
       editor.callCommand(new Function(commandBody),false,resolve);
     }),body);
     console.log(JSON.stringify({milestone:'M6.4',kind:'worksheet-delete-runtime-probe',result},null,2));
+    if (!result || !result.verification || result.verification.status !== 'PASS') process.exitCode=1;
   } finally { await browser.close(); }
 }
 
