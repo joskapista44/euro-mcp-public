@@ -77,19 +77,21 @@ function pivotCommand(spec) {
       if (spec.rowFields && spec.rowFields.length) fieldSpec.rows = spec.rowFields.length === 1 ? spec.rowFields[0] : spec.rowFields;
       if (spec.columnFields && spec.columnFields.length) fieldSpec.columns = spec.columnFields.length === 1 ? spec.columnFields[0] : spec.columnFields;
       if (spec.pageFields && spec.pageFields.length) fieldSpec.pages = spec.pageFields.length === 1 ? spec.pageFields[0] : spec.pageFields;
-      result = p.AddFields(fieldSpec);
+      p.AddFields(fieldSpec);
       after = snap(p);
       var er = (spec.rowFields || []).length, ec = (spec.columnFields || []).length;
       var pass2 = after.rowFields === before.rowFields + er && after.columnFields === before.columnFields + ec;
       return { ok: pass2, outcome: pass2 ? 'ok' : 'verification-failed', source: 'live-coedit-editor', operation: op,
-        verification: { status: pass2 ? 'PASS' : 'FAIL', expected: { rowFields: before.rowFields + er, columnFields: before.columnFields + ec }, actual: after, result: result } };
+        verification: { status: pass2 ? 'PASS' : 'FAIL', expected: { rowFields: before.rowFields + er, columnFields: before.columnFields + ec }, actual: after } };
     }
 
     if (op === 'pivot.addDataField') {
-      before = snap(p); result = p.AddDataField(spec.field); after = snap(p);
+      before = snap(p);
+      p.AddDataField(spec.field);
+      after = snap(p);
       var pass3 = after.dataFields === before.dataFields + 1;
       return { ok: pass3, outcome: pass3 ? 'ok' : 'verification-failed', source: 'live-coedit-editor', operation: op,
-        verification: { status: pass3 ? 'PASS' : 'FAIL', expected: { dataFields: before.dataFields + 1 }, actual: after, result: result } };
+        verification: { status: pass3 ? 'PASS' : 'FAIL', expected: { dataFields: before.dataFields + 1 }, actual: after } };
     }
 
     if (op === 'pivot.rename') {
@@ -107,9 +109,9 @@ function pivotCommand(spec) {
     }
 
     if (op === 'pivot.refresh') {
-      result = p.RefreshTable(); after = snap(p);
+      p.RefreshTable(); after = snap(p);
       return { ok: false, outcome: 'unverified', source: 'live-coedit-editor', operation: op,
-        verification: { status: 'UNKNOWN', expected: 'machine-verifiable pivot refresh effect', actual: after, result: result } };
+        verification: { status: 'UNKNOWN', expected: 'machine-verifiable pivot refresh effect', actual: after } };
     }
 
     return { ok: false, outcome: 'unknown-operation', source: 'live-coedit-editor', operation: op,
