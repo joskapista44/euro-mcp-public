@@ -18,11 +18,7 @@ async function main(){
     try{
       var r=Api.GetActiveSheet().GetRange('XFA60:XFC64');
       r.SetValue([
-        ['Region','Style','Price'],
-        ['East','A',10],
-        ['West','B',20],
-        ['East','B',30],
-        ['West','A',40]
+        ['Region','Style','Price'],['East','A',10],['West','B',20],['East','B',30],['West','A',40]
       ]);
       return {ok:true};
     }catch(e){return {ok:false,error:String(e&&e.message?e.message:e)}}
@@ -53,43 +49,28 @@ async function main(){
   const renamedInspect=await run('inspect-after-rename',{operation:'pivot.inspect',name:renamed,expectedPresent:true});
   const refresh=await run('refresh-deferred',{operation:'pivot.refresh',name:renamed});
 
-  // Cleanup uses only the runtime-proven public ApiWorksheet.Delete method. The target
-  // sheet comes from the pivot's own public parent-sheet readback, and PASS requires a
-  // fresh public Api.GetSheets() readback proving that exact sheet disappeared.
+  // Cleanup uses only runtime-proven public APIs. Embed the public parent-sheet name
+  // into the serialized command body because callCommand does not carry JS closures.
   const renamedActual=renamedInspect&&renamedInspect.verification&&renamedInspect.verification.actual;
   const pivotSheetName=renamedActual&&renamedActual.parentSheet;
-  const cleanup=await frame.evaluate(sheetName=>new Promise(resolve=>window.Asc.editor.callCommand(function(){
-    try{
-      var targetName=String(Api.__m64CleanupSheetName||'');
-      var before=Api.GetSheets().map(function(s){return s.GetName();});
-      var target=targetName?Api.GetSheet(targetName):null;
-      if(!target||typeof target.Delete!=='function') return {ok:false,before:before,targetName:targetName,error:'public worksheet Delete target unavailable'};
-      target.Delete();
-      var after=Api.GetSheets().map(function(s){return s.GetName();});
-      return {ok:before.indexOf(targetName)!==-1&&after.indexOf(targetName)===-1,targetName:targetName,before:before,after:after};
-    }catch(e){return {ok:false,error:String(e&&e.message?e.message:e)}}
-  },false,resolve)),pivotSheetName);
-  // callCommand serializes the command independently, so pass the cleanup target via
-  // a short-lived public Api property visible inside that command, then remove it.
-  // If the first call could not receive the name, retry with explicit setup/readback.
-  let cleanupActual=cleanup;
-  if(pivotSheetName&&(!cleanupActual||cleanupActual.targetName!==pivotSheetName)){
+  let cleanupActual={ok:false,error:'pivot parent sheet unavailable'};
+  if(pivotSheetName){
     cleanupActual=await frame.evaluate(sheetName=>new Promise(resolve=>{
-      window.Asc.editor.callCommand(new Function('Api.__m64CleanupSheetName='+JSON.stringify(sheetName)+'; return true;'),false,()=>{
-        window.Asc.editor.callCommand(function(){
-          try{
-            var targetName=String(Api.__m64CleanupSheetName||'');
-            delete Api.__m64CleanupSheetName;
-            var before=Api.GetSheets().map(function(s){return s.GetName();});
-            var target=targetName?Api.GetSheet(targetName):null;
-            if(!target||typeof target.Delete!=='function') return {ok:false,before:before,targetName:targetName,error:'public worksheet Delete target unavailable'};
-            target.Delete();
-            var after=Api.GetSheets().map(function(s){return s.GetName();});
-            return {ok:before.indexOf(targetName)!==-1&&after.indexOf(targetName)===-1,targetName:targetName,before:before,after:after};
-          }catch(e){return {ok:false,error:String(e&&e.message?e.message:e)}}
-        },false,resolve);
-      });
-    }),sheetName));
+      const commandBody=`
+        try {
+          var targetName=${JSON.stringify(sheetName)};
+          var before=Api.GetSheets().map(function(s){return s.GetName();});
+          var target=Api.GetSheet(targetName);
+          if(!target||typeof target.Delete!=='function') return {ok:false,before:before,targetName:targetName,error:'public worksheet Delete target unavailable'};
+          target.Delete();
+          var after=Api.GetSheets().map(function(s){return s.GetName();});
+          return {ok:before.indexOf(targetName)!==-1&&after.indexOf(targetName)===-1,targetName:targetName,before:before,after:after};
+        } catch(e) {
+          return {ok:false,targetName:${JSON.stringify(sheetName)},error:String(e&&e.message?e.message:e)};
+        }
+      `;
+      window.Asc.editor.callCommand(new Function(commandBody),false,resolve);
+    }),pivotSheetName);
   }
   const cleanupPass=!!pivotSheetName&&!!cleanupActual&&cleanupActual.ok===true&&cleanupActual.targetName===pivotSheetName;
   steps.push({step:'cleanup',result:{
@@ -109,9 +90,7 @@ async function main(){
     const status=entry&&entry.result&&entry.result.verification&&entry.result.verification.status;
     return {step,status:status||'MISSING'};
   });
-  const unexpectedAcceptedSteps=steps
-    .filter(x=>!x.setupOnly&&x.step!=='refresh-deferred'&&!requiredStepNames.includes(x.step))
-    .map(x=>x.step);
+  const unexpectedAcceptedSteps=steps.filter(x=>!x.setupOnly&&x.step!=='refresh-deferred'&&!requiredStepNames.includes(x.step)).map(x=>x.step);
   const seedStatus=seed&&seed.ok?'PASS':'FAIL';
   const refreshStatus=refresh&&refresh.verification&&refresh.verification.status;
   const pass=seedStatus==='PASS'&&requiredSteps.every(x=>x.status==='PASS')&&unexpectedAcceptedSteps.length===0&&refreshStatus==='UNKNOWN';
