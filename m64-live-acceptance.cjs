@@ -34,7 +34,19 @@ async function main(){
   await run('create',{operation:'pivot.createNewWorksheet',source:'XFA60:XFC64',name});
   await run('inspect-after-create',{operation:'pivot.inspect',name,expectedPresent:true});
   await run('add-fields',{operation:'pivot.addFields',name,rowFields:['Region'],columnFields:['Style']});
-  await run('add-data-field',{operation:'pivot.addDataField',name,field:'Price'});
+
+  // Deployed 9.3.4 can apply AddDataField successfully while its callCommand callback
+  // is not delivered. Treat the mutation call as transport-only, then verify the
+  // semantic effect in a fresh public-API callCommand readback.
+  await runPivotInFrame(frame,'window.Asc.editor',{operation:'pivot.addDataField',name,field:'Price'});
+  const dataReadback=await runPivotInFrame(frame,'window.Asc.editor',{operation:'pivot.inspect',name,expectedPresent:true});
+  const dataActual=dataReadback&&dataReadback.verification&&dataReadback.verification.actual;
+  const dataPass=!!dataActual&&dataActual.dataFields===1;
+  steps.push({step:'add-data-field',result:{
+    ok:dataPass,outcome:dataPass?'ok':'verification-failed',source:'live-coedit-editor',operation:'pivot.addDataField',
+    verification:{status:dataPass?'PASS':'FAIL',expected:{dataFields:1},actual:dataActual,readback:'separate-public-inspect'}
+  }});
+
   await run('inspect-after-fields',{operation:'pivot.inspect',name,expectedPresent:true});
   await run('style',{operation:'pivot.style',name,styleName:'PivotStyleMedium2'});
   await run('rename',{operation:'pivot.rename',name,newName:renamed});
