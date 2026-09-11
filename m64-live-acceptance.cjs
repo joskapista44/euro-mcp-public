@@ -50,22 +50,58 @@ async function main(){
   await run('inspect-after-fields',{operation:'pivot.inspect',name,expectedPresent:true});
   await run('style',{operation:'pivot.style',name,styleName:'PivotStyleMedium2'});
   await run('rename',{operation:'pivot.rename',name,newName:renamed});
-  await run('inspect-after-rename',{operation:'pivot.inspect',name:renamed,expectedPresent:true});
+  const renamedInspect=await run('inspect-after-rename',{operation:'pivot.inspect',name:renamed,expectedPresent:true});
   const refresh=await run('refresh-deferred',{operation:'pivot.refresh',name:renamed});
+
+  // Cleanup uses only the runtime-proven public ApiWorksheet.Delete method. The target
+  // sheet comes from the pivot's own public parent-sheet readback, and PASS requires a
+  // fresh public Api.GetSheets() readback proving that exact sheet disappeared.
+  const renamedActual=renamedInspect&&renamedInspect.verification&&renamedInspect.verification.actual;
+  const pivotSheetName=renamedActual&&renamedActual.parentSheet;
+  const cleanup=await frame.evaluate(sheetName=>new Promise(resolve=>window.Asc.editor.callCommand(function(){
+    try{
+      var targetName=String(Api.__m64CleanupSheetName||'');
+      var before=Api.GetSheets().map(function(s){return s.GetName();});
+      var target=targetName?Api.GetSheet(targetName):null;
+      if(!target||typeof target.Delete!=='function') return {ok:false,before:before,targetName:targetName,error:'public worksheet Delete target unavailable'};
+      target.Delete();
+      var after=Api.GetSheets().map(function(s){return s.GetName();});
+      return {ok:before.indexOf(targetName)!==-1&&after.indexOf(targetName)===-1,targetName:targetName,before:before,after:after};
+    }catch(e){return {ok:false,error:String(e&&e.message?e.message:e)}}
+  },false,resolve)),pivotSheetName);
+  // callCommand serializes the command independently, so pass the cleanup target via
+  // a short-lived public Api property visible inside that command, then remove it.
+  // If the first call could not receive the name, retry with explicit setup/readback.
+  let cleanupActual=cleanup;
+  if(pivotSheetName&&(!cleanupActual||cleanupActual.targetName!==pivotSheetName)){
+    cleanupActual=await frame.evaluate(sheetName=>new Promise(resolve=>{
+      window.Asc.editor.callCommand(new Function('Api.__m64CleanupSheetName='+JSON.stringify(sheetName)+'; return true;'),false,()=>{
+        window.Asc.editor.callCommand(function(){
+          try{
+            var targetName=String(Api.__m64CleanupSheetName||'');
+            delete Api.__m64CleanupSheetName;
+            var before=Api.GetSheets().map(function(s){return s.GetName();});
+            var target=targetName?Api.GetSheet(targetName):null;
+            if(!target||typeof target.Delete!=='function') return {ok:false,before:before,targetName:targetName,error:'public worksheet Delete target unavailable'};
+            target.Delete();
+            var after=Api.GetSheets().map(function(s){return s.GetName();});
+            return {ok:before.indexOf(targetName)!==-1&&after.indexOf(targetName)===-1,targetName:targetName,before:before,after:after};
+          }catch(e){return {ok:false,error:String(e&&e.message?e.message:e)}}
+        },false,resolve);
+      });
+    }),sheetName));
+  }
+  const cleanupPass=!!pivotSheetName&&!!cleanupActual&&cleanupActual.ok===true&&cleanupActual.targetName===pivotSheetName;
+  steps.push({step:'cleanup',result:{
+    ok:cleanupPass,outcome:cleanupPass?'ok':'verification-failed',source:'live-coedit-editor',operation:'worksheet.cleanup',
+    verification:{status:cleanupPass?'PASS':'FAIL',expected:{deletedSheet:pivotSheetName,absentAfterDelete:true},actual:cleanupActual,readback:'public-Api.GetSheets'}
+  }});
 
   // Seed is fixture setup, not an accepted product operation. Refresh is explicitly
   // deferred until a machine-verifiable semantic refresh effect is implemented.
-  // Keep the required product-operation set explicit so adding/removing a step cannot
-  // silently invalidate the milestone through a stale magic count.
   const requiredStepNames=[
-    'create',
-    'inspect-after-create',
-    'add-fields',
-    'add-data-field',
-    'inspect-after-fields',
-    'style',
-    'rename',
-    'inspect-after-rename'
+    'create','inspect-after-create','add-fields','add-data-field','inspect-after-fields',
+    'style','rename','inspect-after-rename','cleanup'
   ];
   const requiredByName=new Map(steps.map(x=>[x.step,x]));
   const requiredSteps=requiredStepNames.map(step=>{
@@ -82,13 +118,7 @@ async function main(){
   console.log(JSON.stringify({
     milestone:'M6.4',source:'live-coedit-editor',humanObservationRequired:false,steps,
     outcome:pass?'PASS_WITH_REFRESH_DEFERRED':'FAIL',
-    verification:{
-      status:pass?'PASS':'FAIL',
-      seedStatus,
-      requiredSteps,
-      unexpectedAcceptedSteps,
-      refreshStatus
-    }
+    verification:{status:pass?'PASS':'FAIL',seedStatus,requiredSteps,unexpectedAcceptedSteps,refreshStatus}
   },null,2));
   if(!pass) process.exitCode=1;
  }finally{await browser.close()}
