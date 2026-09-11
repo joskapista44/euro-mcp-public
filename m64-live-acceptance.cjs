@@ -27,7 +27,7 @@ async function main(){
       return {ok:true};
     }catch(e){return {ok:false,error:String(e&&e.message?e.message:e)}}
   },false,resolve)));
-  steps.push({step:'seed',result:{ok:seed.ok,source:'live-coedit-editor',verification:{status:seed.ok?'PASS':'FAIL',expected:'scratch pivot source write completes',actual:seed}}});
+  steps.push({step:'seed',setupOnly:true,result:{ok:seed.ok,source:'live-coedit-editor',verification:{status:seed.ok?'PASS':'FAIL',expected:'scratch pivot source setup completes',actual:seed}}});
 
   async function run(step,spec){const result=await runPivotInFrame(frame,'window.Asc.editor',spec);steps.push({step,result});return result}
   const name='EURO_M64_PIVOT', renamed='EURO_M64_RENAMED';
@@ -53,14 +53,17 @@ async function main(){
   await run('inspect-after-rename',{operation:'pivot.inspect',name:renamed,expectedPresent:true});
   const refresh=await run('refresh-deferred',{operation:'pivot.refresh',name:renamed});
 
-  const required=steps.filter(x=>x.step!=='refresh-deferred');
+  // Seed is fixture setup, not an accepted product operation. Refresh is explicitly
+  // deferred until a machine-verifiable semantic refresh effect is implemented.
+  const required=steps.filter(x=>x.step!=='seed'&&x.step!=='refresh-deferred');
   const statuses=required.map(x=>x.result&&x.result.verification&&x.result.verification.status);
+  const seedStatus=seed&&seed.ok?'PASS':'FAIL';
   const refreshStatus=refresh&&refresh.verification&&refresh.verification.status;
-  const pass=statuses.length===8&&statuses.every(x=>x==='PASS')&&refreshStatus==='UNKNOWN';
+  const pass=seedStatus==='PASS'&&statuses.length===8&&statuses.every(x=>x==='PASS')&&refreshStatus==='UNKNOWN';
   console.log(JSON.stringify({
     milestone:'M6.4',source:'live-coedit-editor',humanObservationRequired:false,steps,
     outcome:pass?'PASS_WITH_REFRESH_DEFERRED':'FAIL',
-    verification:{status:pass?'PASS':'FAIL',operationStatuses:statuses,refreshStatus}
+    verification:{status:pass?'PASS':'FAIL',seedStatus,operationStatuses:statuses,refreshStatus}
   },null,2));
   if(!pass) process.exitCode=1;
  }finally{await browser.close()}
