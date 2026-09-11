@@ -32,7 +32,7 @@ async function main(){
   await run('rename',{operation:'pivot.rename',name,newName:renamed});
   const renamedInspect=await run('inspect-after-rename',{operation:'pivot.inspect',name:renamed,expectedPresent:true});
   await run('refresh',{operation:'pivot.refresh',name:renamed,
-    sourceMutation:{sheetName:'Sheet1',range:'XFB61',value:110},
+    sourceMutation:{sheetName:'Sheet1',range:'XFC61',value:110},
     assertions:[
       {items:['East','A'],expectedBefore:10,expectedAfter:110},
       {items:['East','B'],expectedBefore:30,expectedAfter:30}
