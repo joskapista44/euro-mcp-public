@@ -5,18 +5,38 @@ function pivotCommand(spec) {
     try { return { ok: true, value: fn() }; }
     catch (e) { return { ok: false, error: String(e && e.message ? e.message : e) }; }
   }
+  function call(obj, name) {
+    var r = safe(function () { return obj && typeof obj[name] === 'function' ? obj[name]() : null; });
+    return r.ok ? r.value : null;
+  }
+  function sourceAddress(p) {
+    var src = call(p, 'GetSource');
+    if (src && typeof src.GetAddress === 'function') {
+      var a = safe(function () { return src.GetAddress(); });
+      return a.ok ? a.value : null;
+    }
+    return typeof src === 'string' ? src : null;
+  }
+  function parentSheetName(p) {
+    var parent = call(p, 'GetParent');
+    if (parent && typeof parent.GetName === 'function') {
+      var n = safe(function () { return parent.GetName(); });
+      return n.ok ? n.value : null;
+    }
+    return null;
+  }
   function snap(p) {
     if (!p) return null;
-    function call(name) {
-      var r = safe(function () { return typeof p[name] === 'function' ? p[name]() : null; });
-      return r.ok ? r.value : null;
-    }
     return {
-      name: call('GetName'), source: call('GetSource'),
-      rowFields: (call('GetRowFields') || []).length,
-      columnFields: (call('GetColumnFields') || []).length,
-      dataFields: (call('GetDataFields') || []).length,
-      styleName: call('GetStyleName'), title: call('GetTitle'), description: call('GetDescription')
+      name: call(p, 'GetName'),
+      source: sourceAddress(p),
+      parentSheet: parentSheetName(p),
+      rowFields: (call(p, 'GetRowFields') || []).length,
+      columnFields: (call(p, 'GetColumnFields') || []).length,
+      dataFields: (call(p, 'GetDataFields') || []).length,
+      styleName: call(p, 'GetStyleName'),
+      title: call(p, 'GetTitle'),
+      description: call(p, 'GetDescription')
     };
   }
   function get(name) {
@@ -30,7 +50,7 @@ function pivotCommand(spec) {
     if (op === 'pivot.inspect') {
       p = get(spec.name);
       return { ok: true, outcome: 'ok', source: 'live-coedit-editor', operation: op,
-        verification: { status: 'PASS', expected: 'live-pivot-state', actual: snap(p) } };
+        verification: { status: 'PASS', expected: spec.expectedPresent === true ? 'pivot-present' : 'live-pivot-state', actual: snap(p) } };
     }
 
     if (op === 'pivot.createNewWorksheet') {
@@ -44,7 +64,7 @@ function pivotCommand(spec) {
       var a = snap(p);
       var pass = after === before + 1 && a && (!spec.name || a.name === spec.name) && a.source === spec.source;
       return { ok: pass, outcome: pass ? 'ok' : 'verification-failed', source: 'live-coedit-editor', operation: op,
-        verification: { status: pass ? 'PASS' : 'FAIL', expected: { count: before + 1, name: spec.name, source: spec.source }, actual: { count: after, pivot: a } } };
+        verification: { status: pass ? 'PASS' : 'FAIL', expected: { count: before + 1, name: spec.name || null, source: spec.source }, actual: { count: after, pivot: a } } };
     }
 
     p = get(spec.name);
@@ -53,12 +73,16 @@ function pivotCommand(spec) {
 
     if (op === 'pivot.addFields') {
       before = snap(p);
-      result = p.AddFields(spec.rowFields || [], spec.columnFields || [], spec.pageFields || []);
+      var fieldSpec = {};
+      if (spec.rowFields && spec.rowFields.length) fieldSpec.rows = spec.rowFields.length === 1 ? spec.rowFields[0] : spec.rowFields;
+      if (spec.columnFields && spec.columnFields.length) fieldSpec.columns = spec.columnFields.length === 1 ? spec.columnFields[0] : spec.columnFields;
+      if (spec.pageFields && spec.pageFields.length) fieldSpec.pages = spec.pageFields.length === 1 ? spec.pageFields[0] : spec.pageFields;
+      result = p.AddFields(fieldSpec);
       after = snap(p);
       var er = (spec.rowFields || []).length, ec = (spec.columnFields || []).length;
-      var pass2 = after.rowFields >= before.rowFields + er && after.columnFields >= before.columnFields + ec;
+      var pass2 = after.rowFields === before.rowFields + er && after.columnFields === before.columnFields + ec;
       return { ok: pass2, outcome: pass2 ? 'ok' : 'verification-failed', source: 'live-coedit-editor', operation: op,
-        verification: { status: pass2 ? 'PASS' : 'FAIL', expected: { rowFieldsAtLeast: before.rowFields + er, columnFieldsAtLeast: before.columnFields + ec }, actual: after, result: result } };
+        verification: { status: pass2 ? 'PASS' : 'FAIL', expected: { rowFields: before.rowFields + er, columnFields: before.columnFields + ec }, actual: after, result: result } };
     }
 
     if (op === 'pivot.addDataField') {
@@ -69,10 +93,10 @@ function pivotCommand(spec) {
     }
 
     if (op === 'pivot.rename') {
-      var old = snap(p); p.SetName(spec.newName); after = snap(get(spec.newName) || p);
-      var pass4 = !!after && after.name === spec.newName;
+      before = snap(p); p.SetName(spec.newName); after = snap(get(spec.newName) || p);
+      var pass4 = !!after && after.name === spec.newName && after.source === before.source;
       return { ok: pass4, outcome: pass4 ? 'ok' : 'verification-failed', source: 'live-coedit-editor', operation: op,
-        verification: { status: pass4 ? 'PASS' : 'FAIL', expected: { name: spec.newName }, actual: after, before: old } };
+        verification: { status: pass4 ? 'PASS' : 'FAIL', expected: { name: spec.newName, source: before.source }, actual: after, before: before } };
     }
 
     if (op === 'pivot.style') {
@@ -84,8 +108,8 @@ function pivotCommand(spec) {
 
     if (op === 'pivot.refresh') {
       result = p.RefreshTable(); after = snap(p);
-      return { ok: true, outcome: 'ok', source: 'live-coedit-editor', operation: op,
-        verification: { status: 'PASS', expected: 'public-refresh-completed', actual: after, result: result } };
+      return { ok: false, outcome: 'unverified', source: 'live-coedit-editor', operation: op,
+        verification: { status: 'UNKNOWN', expected: 'machine-verifiable pivot refresh effect', actual: after, result: result } };
     }
 
     return { ok: false, outcome: 'unknown-operation', source: 'live-coedit-editor', operation: op,
