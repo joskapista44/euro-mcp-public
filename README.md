@@ -17,6 +17,10 @@ The supported paths are:
 
 If a capability cannot be implemented through the Euro-Office / Document Server path, it must be reported as unavailable until that path exists. A local document-processing fallback is intentionally out of scope.
 
+## Excel Power User capability status
+
+The canonical register for currently deferred or unsupported Excel Power User operations is `EXCEL-POWER-USER-CAPABILITY-GAPS.md`. It records the deployed DocumentServer version, live runtime evidence, fail-closed blockers, recheck conditions, and capabilities already proven LIVE PASS. Update that register whenever the runtime changes or a capability is promoted.
+
 ## Requirements
 
 - Node.js 22 or newer.
@@ -72,6 +76,7 @@ CI also enforces the product boundary. It rejects reintroduction of the retired 
 - `lib.cjs`, `lib-operations-*.cjs`, `operations/*.cjs`, `euro-magok.cjs` — document operations implemented for OnlyOffice/DocBuilder.
 - `office-trace.cjs`, `capabilities-registry-build.mjs`, `capability-status-model.mjs` — observability and capability evidence.
 - `package-consistency.cjs` — output package integrity validation.
+- `EXCEL-POWER-USER-CAPABILITY-GAPS.md` — canonical Excel Power User deferred/unsupported capability register.
 - `test*.cjs`, `test*.mjs`, `test_box_helper_*.py` — automated tests.
 
 ## Security
