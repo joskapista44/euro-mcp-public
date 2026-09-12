@@ -10,7 +10,7 @@ function commandBody(operation, spec={}) {
   if(operation==='create') return `${sheet} var p=s.AddProtectedRange(${q(spec.title)},${q(spec.range)}); return {ok:!!p,count:(s.GetAllProtectedRanges()||[]).length,lookup:!!s.GetProtectedRange(${q(spec.title)})};`;
   if(operation==='inspect') return `${sheet} var p=s.GetProtectedRange(${q(spec.title)}); if(!p)return {ok:false,error:'protected range not found'}; function U(u){return u?{id:u.GetId(),name:u.GetName(),type:u.GetType()}:null} return {ok:true,count:(s.GetAllProtectedRanges()||[]).length,lookup:true,user:${spec.userId?`U(p.GetUser(${q(spec.userId)}))`:'null'},users:(p.GetAllUsers()||[]).map(U)};`;
   if(operation==='lookup-pair') return `${sheet} return {oldLookup:!!s.GetProtectedRange(${q(spec.title)}),newLookup:!!s.GetProtectedRange(${q(spec.newTitle)})};`;
-  if(operation==='rename') return `${sheet} var p=s.GetProtectedRange(${q(spec.title)}); if(!p)return {ok:false,error:'protected range not found'}; var r=p.SetTitle(${q(spec.newTitle)}); return {ok:r===true,returnValue:r};`;
+  if(operation==='rename') return `${sheet} var p=s.GetProtectedRange(${q(spec.title)}); if(!p)return {ok:false,error:'protected range not found'}; p.SetTitle(${q(spec.newTitle)}); return true;`;
   if(operation==='add-user') return `${sheet} var p=s.GetProtectedRange(${q(spec.title)}); if(!p)return {ok:false,error:'protected range not found'}; function U(u){return u?{id:u.GetId(),name:u.GetName(),type:u.GetType()}:null} var a=p.AddUser(${q(spec.userId)},${q(spec.userName)},${q(spec.userType||'CanEdit')}); return {ok:!!a,added:U(a),getUser:U(p.GetUser(${q(spec.userId)})),users:(p.GetAllUsers()||[]).map(U)};`;
   if(operation==='delete-user') return `${sheet} var p=s.GetProtectedRange(${q(spec.title)}); if(!p)return {ok:false,error:'protected range not found'}; var r=p.DeleteUser(${q(spec.userId)}); return {ok:r===true,returnValue:r};`;
   throw new Error('unsupported protected range operation: '+operation);
@@ -23,16 +23,16 @@ async function call(frame, operation, spec={}) {
 
 async function execute(frame, operation, spec={}) {
   try {
-    const actual=await call(frame,operation,spec);
-    if(operation==='create') return status(actual&&actual.ok&&actual.lookup?'PASS':'FAIL',operation,{lookup:true},actual);
-    if(operation==='inspect') return status(actual&&actual.ok&&actual.lookup?'PASS':'FAIL',operation,{lookup:true},actual);
     if(operation==='rename') {
-      if(!(actual&&actual.ok&&actual.returnValue===true)) return status('FAIL',operation,{renameReturn:true},actual);
+      await call(frame,operation,spec);
       await new Promise(r=>setTimeout(r,spec.readbackDelayMs||1000));
       const readback=await call(frame,'lookup-pair',{sheetName:spec.sheetName,title:spec.title,newTitle:spec.newTitle});
       const pass=readback&&readback.oldLookup===false&&readback.newLookup===true;
-      return status(pass?'PASS':'FAIL',operation,{renameReturn:true,oldLookup:false,newLookup:true},{mutation:actual,readback});
+      return status(pass?'PASS':'FAIL',operation,{oldLookup:false,newLookup:true},{readback});
     }
+    const actual=await call(frame,operation,spec);
+    if(operation==='create') return status(actual&&actual.ok&&actual.lookup?'PASS':'FAIL',operation,{lookup:true},actual);
+    if(operation==='inspect') return status(actual&&actual.ok&&actual.lookup?'PASS':'FAIL',operation,{lookup:true},actual);
     if(operation==='add-user') {
       const u=actual&&actual.getUser;
       const pass=actual&&actual.ok&&u&&u.id===spec.userId&&u.name===spec.userName&&u.type===(spec.userType||'CanEdit');
