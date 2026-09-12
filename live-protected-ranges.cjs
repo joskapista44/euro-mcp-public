@@ -26,10 +26,15 @@ async function execute(frame, operation, spec={}) {
     if(operation==='rename') {
       await call(frame,operation,spec);
       await new Promise(r=>setTimeout(r,spec.readbackDelayMs||1000));
-      let readback=await call(frame,'lookup-pair',{sheetName:spec.sheetName,title:spec.title,newTitle:spec.newTitle});
-      if(!readback){await new Promise(r=>setTimeout(r,500));readback=await call(frame,'lookup-pair',{sheetName:spec.sheetName,title:spec.title,newTitle:spec.newTitle});}
+      let readback=null;
+      let attempts=0;
+      while(!readback && attempts<5) {
+        attempts++;
+        readback=await call(frame,'lookup-pair',{sheetName:spec.sheetName,title:spec.title,newTitle:spec.newTitle});
+        if(!readback && attempts<5) await new Promise(r=>setTimeout(r,500));
+      }
       const pass=readback&&readback.oldLookup===false&&readback.newLookup===true;
-      return status(pass?'PASS':'FAIL',operation,{oldLookup:false,newLookup:true},{readback:readback||null});
+      return status(pass?'PASS':'FAIL',operation,{oldLookup:false,newLookup:true},{readback:readback||null,attempts});
     }
     const actual=await call(frame,operation,spec);
     if(operation==='create') return status(actual&&actual.ok&&actual.lookup?'PASS':'FAIL',operation,{lookup:true},actual);
