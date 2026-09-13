@@ -19,31 +19,40 @@ Fresh 9.3.4.60 acceptance confirms that FormatAsTable executes, but ApiWorksheet
 
 Recheck when EuroOffice is based on ONLYOFFICE 9.4 or newer, where the upstream ListObject API became available.
 
-### M5.3 Advanced chart presentation — DEFERRED
+### M5.3 Advanced chart presentation — LIVE PASS
 
-Fresh 9.3.4.60 runtime probe confirms:
+The deployed 9.3.4.60 DocumentServer has been extended with public semantic getters required for fail-closed acceptance.
 
-- legend: SetLegendPos exists; public GetLegendPos absent;
-- axis titles: SetHorAxisTitle and SetVerAxisTitle exist; matching semantic getters absent;
-- data labels: SetShowDataLabels and SetShowPointDataLabel exist; matching state getter absent;
-- chart style: ApplyChartStyle exists; chart-style getter absent.
+Live public-only acceptance now verifies:
 
-These mutations remain DEFERRED until public semantic readback exists.
+- legend position: SetLegendPos + GetLegendPos;
+- horizontal and vertical axis titles: setters + public semantic title getters;
+- data-label state: setter + public GetDataLabels readback;
+- chart style: ApplyChartStyle + public GetChartStyle readback.
 
-### M5.4 Chart data and object management — PARTIAL PASS / DEFERRED
+M5.3 is no longer a capability gap.
 
-Verified PASS:
+### M5.4 Chart data and object management — LIVE PASS WITH DOCUMENTED RUNTIME LIMITATION
+
+Verified public-only LIVE PASS:
 
 - rename: SetName + GetName;
-- resize: SetSize + GetWidth/GetHeight.
+- resize: SetSize + GetWidth/GetHeight;
+- position: SetPosition + GetPosition;
+- series name: SetSeriaName + ApiChartSeries.GetName;
+- series values: SetSeriaValues + ApiChartSeries.GetValues;
+- category formula: SetCatFormula + ApiChartSeries.GetCatFormula;
+- scatter X-values: SetSeriaXValues + ApiChartSeries.GetXValues.
 
-Open gaps on 9.3.4.60:
+The final standalone M5.4 live acceptance returned PASS with exit code 0 and cleaned both test charts back to a final chart count of zero.
 
-- position — DEFERRED: SetPosition exists; GetPosition, GetPosX and GetPosY absent;
-- series name/values/X-values/category formula — DEFERRED: SetSeriaName, SetSeriaValues, SetSeriaXValues and SetCatFormula exist; matching public semantic getters absent;
-- copy/duplicate — UNSUPPORTED: chart Copy absent and worksheet AddDrawing absent.
+Documented deployed-runtime limitation:
 
-The public series wrapper exposes ChangeChartType, GetChartType and GetClassType. private_GetSeries is internal and forbidden for acceptance.
+- copy/duplicate — UNSUPPORTED: the live spreadsheet ApiChart object exposes no public Copy(), and the public worksheet surface exposes no AddDrawing or other measured generic drawing-attach path suitable for a copied chart.
+
+This copy limitation is not a DEFERRED semantic-readback gap. No public spreadsheet copy operation is available to implement and verify on the deployed runtime.
+
+Acceptance uses only public Office API readback. Internal/private series state is forbidden as acceptance evidence.
 
 ### M7 Protection — CORE LIVE PASS WITH DEFERRED EXTENSIONS
 
@@ -65,8 +74,8 @@ These are not gaps:
 - M6.3 Defined Names — LIVE PASS
 - M6.4 Pivot Tables — LIVE PASS, including semantic refresh readback
 - M7 Protected Range ACL core — LIVE PASS
-- chart rename — PASS
-- chart resize — PASS
+- M5.3 Advanced chart presentation — LIVE PASS
+- M5.4 Chart data and object management — LIVE PASS, with copy/duplicate documented as runtime-UNSUPPORTED
 - Freeze Panes — implemented earlier
 
 ## Status meanings

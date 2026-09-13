@@ -33,7 +33,7 @@ All four M6 sub-milestones have live machine-verifiable PASS evidence and requir
 The following are not hidden M6 blockers and remain separate future/deferred capability work:
 
 - Excel Tables / ListObject support, previously deferred because the deployed runtime lacked a usable real table/ListObject API.
-- Deferred advanced chart capabilities from M5.3/M5.4.
+- M5.3/M5.4 advanced chart work was outside the original M6 closure scope; it has since been resolved separately: M5.3 is FULL LIVE PASS / CLOSED, and M5.4 is LIVE PASS for the supported chart data/object capabilities, with chart copy/duplicate explicitly documented as runtime-UNSUPPORTED on EuroOffice DocumentServer 9.3.4.60.
 - Worksheet/range Protection, to be assessed as a later capability milestone.
 - Final cross-capability Excel Power User integrated acceptance, to be performed after the remaining planned capability work.
 
