@@ -2,8 +2,8 @@
 
 Status: **LIVE PASS**
 
-Runtime: EuroOffice / ONLYOFFICE DocumentServer 9.3.4-hotfix.1.  
-Transport: `live-coedit-editor` through Playwright and the authenticated spreadsheet editor.  
+Runtime: EuroOffice / ONLYOFFICE DocumentServer 9.3.4-hotfix.1.
+Transport: `live-coedit-editor` through Playwright and the authenticated spreadsheet editor.
 Human observation required: **false**.
 
 ## Implemented operations
@@ -32,7 +32,7 @@ Required sequence:
 
 A pre-clean delete is fixture setup and is excluded from the required operation statuses.
 
-Required operation statuses: **7/7 PASS**.  
+Required operation statuses: **7/7 PASS**.
 Top-level outcome: **PASS**.
 
 No human observation or private/internal ONLYOFFICE API is part of acceptance.

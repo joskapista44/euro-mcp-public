@@ -2,8 +2,8 @@
 
 Status: **LIVE PASS**
 
-Runtime: EuroOffice / ONLYOFFICE DocumentServer 9.3.4-hotfix.1.  
-Transport: `live-coedit-editor` through Playwright and the authenticated spreadsheet editor.  
+Runtime: EuroOffice / ONLYOFFICE DocumentServer 9.3.4-hotfix.1.
+Transport: `live-coedit-editor` through Playwright and the authenticated spreadsheet editor.
 Human observation required: **false**.
 
 ## Runtime-proven public surface
@@ -41,8 +41,8 @@ Required sequence:
 9. Refresh semantic verification — PASS: source Price for East/A changes 10 → 110, public pivot `GetData(['East','A'])` changes 10 → 110, while control `GetData(['East','B'])` remains 30 → 30.
 10. Delete the generated pivot worksheet and verify absence — PASS.
 
-Required operation statuses: **10/10 PASS**.  
-Unexpected accepted steps: **none**.  
+Required operation statuses: **10/10 PASS**.
+Unexpected accepted steps: **none**.
 Top-level outcome: **PASS**.
 
 ## Resolved debt
