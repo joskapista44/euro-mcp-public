@@ -1,0 +1,130 @@
+'use strict'
+
+const http = require('http')
+const coedit = require('./coedit.cjs')
+
+const LIVE_SOURCE = 'live-coedit-editor'
+
+function unwrap(j) { return j?.ocs?.data ?? j?.data ?? j }
+
+async function fetchConfig({ url, user, pass, fileId }) {
+  const auth = 'Basic ' + Buffer.from(`${user}:${pass}`).toString('base64')
+  const r = await fetch(url.replace(/\/$/, '') + '/ocs/v2.php/apps/eurooffice/api/v1/config/' + encodeURIComponent(fileId) + '?format=json', {
+    headers: { Authorization: auth, 'OCS-APIRequest': 'true', Accept: 'application/json' },
+  })
+  if (!r.ok) throw new Error(`config HTTP ${r.status}`)
+  return unwrap(await r.json())
+}
+
+function startHost(config) {
+  const safeConfig = JSON.stringify(config).replace(/</g, '\\u003c')
+  const api = config.documentServerUrl + 'web-apps/apps/api/documents/api.js?shardKey=' + encodeURIComponent(config.document.key)
+  const html = `<!doctype html><html><head><meta charset="utf-8"><script src="${api}"></script></head><body><div id="editor" style="width:1200px;height:800px"></div><script>window.__ready=false;window.__error=null;window.__config=${safeConfig};window.__config.events={onDocumentReady:function(){window.__ready=true}};try{window.__docEditor=new DocsAPI.DocEditor('editor',window.__config)}catch(e){window.__error=String(e&&e.stack||e)}</script></body></html>`
+  return new Promise(resolve => {
+    const server = http.createServer((req, res) => { res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' }); res.end(html) })
+    server.listen(0, '127.0.0.1', () => resolve({ server, url: `http://127.0.0.1:${server.address().port}/` }))
+  })
+}
+
+async function semanticProbe(frame) {
+  return frame.evaluate(() => new Promise(resolve => {
+    const e = window.editor || (window.Asc || {}).editor
+    if (!e || typeof e.callCommand !== 'function') return resolve(null)
+    let done = false
+    const finish = v => { if (!done) { done = true; resolve(v) } }
+    const timer = setTimeout(() => finish(null), 1500)
+    try {
+      e.callCommand(new Function(`
+        try {
+          if (typeof Api === 'undefined' || !Api || typeof Api.GetSheets !== 'function') return {ok:false};
+          var sheets=Api.GetSheets()||[];
+          var names=[];
+          for(var i=0;i<sheets.length;i++){
+            var sh=sheets[i];
+            if(!sh || typeof sh.GetName!=='function' || typeof sh.GetRange!=='function') return {ok:false};
+            var name=sh.GetName();
+            var probe=sh.GetRange('A1');
+            if(!probe || typeof probe.GetAddress!=='function') return {ok:false};
+            names.push(name);
+          }
+          return {ok:true,sheetCount:sheets.length,sheetNames:names};
+        } catch(err) { return {ok:false,error:String(err&&err.message?err.message:err)}; }
+      `), false, v => { clearTimeout(timer); finish(v) })
+    } catch (_) { clearTimeout(timer); finish(null) }
+  }))
+}
+
+async function openMinimalXlsxSession({ url, user, pass, fileId, timeoutMs = 30000, pollMs = 50 }) {
+  const started = Date.now()
+  const config = await fetchConfig({ url, user, pass, fileId })
+  const host = await startHost(config)
+  const loaded = coedit.loadPlaywright()
+  if (!loaded.ok) { await new Promise(resolve => host.server.close(resolve)); throw new Error(loaded.indok) }
+  const browser = await loaded.pw.chromium.launch()
+  const page = await browser.newPage({ viewport: { width: 1400, height: 900 } })
+  try {
+    await page.goto(host.url, { waitUntil: 'domcontentloaded', timeout: timeoutMs })
+    await page.waitForFunction(() => window.__ready === true || window.__error, null, { timeout: timeoutMs, polling: pollMs })
+    const shell = await page.evaluate(() => ({ ready: window.__ready, error: window.__error }))
+    if (!shell.ready) throw new Error(shell.error || 'editor shell not ready')
+
+    const deadline = Date.now() + timeoutMs
+    let frame = null
+    let apiWhere = null
+    let readiness = null
+    while (Date.now() < deadline) {
+      frame = page.frames().find(f => /spreadsheeteditor/.test(f.url())) || null
+      if (frame) {
+        apiWhere = await frame.evaluate(() => ((window.Asc || {}).editor && typeof window.Asc.editor.callCommand === 'function') ? 'window.Asc.editor' : (window.editor && typeof window.editor.callCommand === 'function') ? 'window.editor' : null).catch(() => null)
+        if (apiWhere) readiness = await semanticProbe(frame).catch(() => null)
+      }
+      if (frame && apiWhere && readiness?.ok) break
+      await new Promise(resolve => setTimeout(resolve, pollMs))
+    }
+    if (!frame || !apiWhere || !readiness?.ok) throw new Error('live spreadsheet semantic model not ready')
+
+    const session = {
+      config, browser, page, frame, host, apiWhere, readiness,
+      openedMs: Date.now() - started,
+      closed: false,
+      writes: 0,
+      async callCommand(body, { timeoutMs: commandTimeoutMs = 10000, isRecalculate = false } = {}) {
+        if (this.closed) throw new Error('session closed')
+        const source = typeof body === 'function' ? `return (${body.toString()})();` : String(body)
+        return this.frame.evaluate(({ source, commandTimeoutMs, isRecalculate }) => new Promise(resolve => {
+          const e = window.editor || (window.Asc || {}).editor
+          if (!e || typeof e.callCommand !== 'function') return resolve({ ok:false, outcome:'callcommand-unavailable', source:'live-coedit-editor' })
+          const started = Date.now(); let done = false
+          const finish = value => { if (done) return; done = true; clearTimeout(timer); resolve(value) }
+          const timer = setTimeout(() => finish({ ok:false, outcome:'command-callback-timeout', source:'live-coedit-editor', elapsedMs:Date.now()-started }), commandTimeoutMs)
+          try { e.callCommand(new Function(source), isRecalculate, result => finish({ ok:true, outcome:'command-completed', source:'live-coedit-editor', result:result===undefined?null:result, elapsedMs:Date.now()-started })) }
+          catch(err) { finish({ ok:false, outcome:'call-threw', source:'live-coedit-editor', error:String(err&&err.message?err.message:err), elapsedMs:Date.now()-started }) }
+        }), { source, commandTimeoutMs, isRecalculate })
+      },
+      markWrite() { this.writes++ },
+      async close() {
+        if (this.closed) return { ok:true, outcome:'already-closed' }
+        this.closed = true
+        let lifecycle = { ok:false, outcome:'requestClose-unavailable' }
+        try {
+          lifecycle = await this.page.evaluate(async () => {
+            const d = window.__docEditor
+            if (!d || typeof d.requestClose !== 'function') return { ok:false, outcome:'requestClose-unavailable' }
+            try { const ret=d.requestClose(); if(ret&&typeof ret.then==='function')await ret; return {ok:true,outcome:'requestClose-called'} }
+            catch(err){return {ok:false,outcome:'requestClose-failed',error:String(err&&err.message?err.message:err)}}
+          })
+        } catch(err) { lifecycle={ok:false,outcome:'requestClose-evaluate-failed',error:String(err&&err.message?err.message:err)} }
+        await this.browser.close().catch(() => {})
+        await new Promise(resolve => this.host.server.close(resolve))
+        return lifecycle
+      },
+    }
+    return session
+  } catch (err) {
+    await browser.close().catch(() => {})
+    await new Promise(resolve => host.server.close(resolve))
+    throw err
+  }
+}
+
+module.exports = { LIVE_SOURCE, fetchConfig, startHost, semanticProbe, openMinimalXlsxSession }
