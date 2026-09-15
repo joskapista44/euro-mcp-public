@@ -5,6 +5,7 @@ const inspector = require('./workbook-inspector.cjs')
 const rangeReader = require('./range-reader.cjs')
 const bulkWriter = require('./bulk-writer.cjs')
 const verification = require('./verification-contract.cjs')
+const agentTask = require('./xlsx-agent-task.cjs')
 
 async function inspectInSession(session) {
   const r = await inspector.inspectWorkbookInFrame(session.frame, session.apiWhere)
@@ -29,21 +30,29 @@ async function writeRangeVerifiedInSession(session, spec) {
   return { ok:true, outcome:'range-write-live-verified', authority:'LIVE_VERIFY', before, write, after, verification:verified, session:{persistent:true,sameSession:true} }
 }
 
+function buildSessionApi(session){
+  return {
+    session,
+    inspect:()=>inspectInSession(session),
+    readRange:spec=>readRangeInSession(session,spec),
+    writeRangeVerified:spec=>writeRangeVerifiedInSession(session,spec),
+  }
+}
+
 async function withPersistentXlsxSession(options, task) {
   const session = await openMinimalXlsxSession(options)
   const started = Date.now()
   try {
-    const api = {
-      session,
-      inspect: () => inspectInSession(session),
-      readRange: spec => readRangeInSession(session, spec),
-      writeRangeVerified: spec => writeRangeVerifiedInSession(session, spec),
-    }
-    const result = await task(api)
+    const result = await task(buildSessionApi(session))
     return { ...result, persistentSession:{oneEditorSession:true,openedMs:session.openedMs,taskMs:Date.now()-started,writes:session.writes,closedByWrapper:true} }
   } finally {
     await session.close().catch(() => {})
   }
 }
 
-module.exports = { inspectInSession, readRangeInSession, writeRangeVerifiedInSession, withPersistentXlsxSession }
+async function executeAgentTaskInPersistentSession({fileId,task,credentials,timeoutMs=30000,pollMs=50}={}){
+  if(!credentials?.url||!credentials?.user||!credentials?.pass)return {ok:false,outcome:'xlsx-persistent-credentials-required',authority:'PLAN_ONLY',writeAllowed:false}
+  return withPersistentXlsxSession({url:credentials.url,user:credentials.user,pass:credentials.pass,fileId,timeoutMs,pollMs},api=>agentTask.executeTask({task,api}))
+}
+
+module.exports = { inspectInSession, readRangeInSession, writeRangeVerifiedInSession, buildSessionApi, withPersistentXlsxSession, executeAgentTaskInPersistentSession }
