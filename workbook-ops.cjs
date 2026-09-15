@@ -64,14 +64,27 @@ function operationCommand(op) {
       var copySheet = getSheet(op.sheet)
       if (!copySheet) return fail('sheet-not-found', 'the requested worksheet was not found', { sheet: op.sheet })
       if (getSheet(op.name)) return fail('already-exists', 'target worksheet name already exists', { sheet: op.name })
-      // Worksheet copy is version-dependent in the live API. Probe it and fail closed when absent.
-      if (!has(copySheet, 'Copy')) return unsupported(op.type, 'ApiWorksheet.Copy is unavailable')
-      var copied = copySheet.Copy()
-      if (!copied) return fail('copy-failed', 'ApiWorksheet.Copy returned no worksheet', { sheet: op.sheet })
-      if (!has(copied, 'SetName')) return unsupported(op.type, 'copied ApiWorksheet.SetName is unavailable')
-      copied.SetName(op.name)
-      if (!getSheet(op.name)) return fail('verification-failed', 'copy completed but target worksheet is not visible', { sheet: op.sheet, name: op.name })
-      return { ok: true, outcome: 'ok', source: 'live-coedit-editor', operation: op.type, sheet: op.sheet, name: op.name }
+      // The Office ApiWorksheet wrapper does not expose Copy in this runtime. Use the
+      // spreadsheet editor's native worksheet-copy API: this is the same public path
+      // used by the EuroOffice/ONLYOFFICE sheet Move/Copy UI and preserves the engine's
+      // history/coauthoring behavior. The source index is resolved from the live Api
+      // worksheet collection at this fresh callCommand boundary.
+      var editorApi = (typeof Asc !== 'undefined' && Asc && Asc.editor) ? Asc.editor : ((typeof editor !== 'undefined') ? editor : null)
+      if (!has(editorApi, 'asc_copyWorksheet')) return unsupported(op.type, 'spreadsheet editor asc_copyWorksheet is unavailable')
+      if (!has(Api, 'GetSheets')) return unsupported(op.type, 'Api.GetSheets is unavailable for source identity resolution')
+      var sheets = Api.GetSheets() || []
+      var sourceIndex = -1, sourceCount = 0
+      for (var si = 0; si < sheets.length; si++) {
+        var candidate = sheets[si]
+        if (candidate && has(candidate, 'GetName') && candidate.GetName() === op.sheet) { sourceIndex = si; sourceCount++ }
+      }
+      if (sourceCount !== 1) return fail('sheet-identity-ambiguous', 'source worksheet identity is not unique at dispatch boundary', { sheet: op.sheet, count: sourceCount })
+      // where=-1 is the editor API convention for copying to the end of this workbook.
+      // arrNames supplies the new worksheet name; arrSheets identifies the source index.
+      var copied = editorApi.asc_copyWorksheet(-1, [op.name], [sourceIndex])
+      if (copied === false) return fail('copy-failed', 'asc_copyWorksheet returned false', { sheet: op.sheet, name: op.name, sourceIndex: sourceIndex })
+      if (!getSheet(op.name)) return fail('verification-failed', 'asc_copyWorksheet returned without exposing the target worksheet', { sheet: op.sheet, name: op.name, sourceIndex: sourceIndex })
+      return { ok: true, outcome: 'ok', source: 'live-coedit-editor', operation: op.type, sheet: op.sheet, name: op.name, sourceIndex: sourceIndex, dispatchApi: 'asc_copyWorksheet' }
     }
 
     if (op.type === 'sheet.move') {
