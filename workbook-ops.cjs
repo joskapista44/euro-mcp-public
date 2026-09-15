@@ -60,31 +60,7 @@ function operationCommand(op) {
     }
 
     if (op.type === 'sheet.copy') {
-      if (!op.sheet || !op.name) return fail('invalid-operation', 'sheet and name are required', { operation: op.type })
-      var copySheet = getSheet(op.sheet)
-      if (!copySheet) return fail('sheet-not-found', 'the requested worksheet was not found', { sheet: op.sheet })
-      if (getSheet(op.name)) return fail('already-exists', 'target worksheet name already exists', { sheet: op.name })
-      // The Office ApiWorksheet wrapper does not expose Copy in this runtime. Use the
-      // spreadsheet editor's native worksheet-copy API: this is the same public path
-      // used by the EuroOffice/ONLYOFFICE sheet Move/Copy UI and preserves the engine's
-      // history/coauthoring behavior. The source index is resolved from the live Api
-      // worksheet collection at this fresh callCommand boundary.
-      var editorApi = (typeof Asc !== 'undefined' && Asc && Asc.editor) ? Asc.editor : ((typeof editor !== 'undefined') ? editor : null)
-      if (!has(editorApi, 'asc_copyWorksheet')) return unsupported(op.type, 'spreadsheet editor asc_copyWorksheet is unavailable')
-      if (!has(Api, 'GetSheets')) return unsupported(op.type, 'Api.GetSheets is unavailable for source identity resolution')
-      var sheets = Api.GetSheets() || []
-      var sourceIndex = -1, sourceCount = 0
-      for (var si = 0; si < sheets.length; si++) {
-        var candidate = sheets[si]
-        if (candidate && has(candidate, 'GetName') && candidate.GetName() === op.sheet) { sourceIndex = si; sourceCount++ }
-      }
-      if (sourceCount !== 1) return fail('sheet-identity-ambiguous', 'source worksheet identity is not unique at dispatch boundary', { sheet: op.sheet, count: sourceCount })
-      // where=-1 is the editor API convention for copying to the end of this workbook.
-      // arrNames supplies the new worksheet name; arrSheets identifies the source index.
-      var copied = editorApi.asc_copyWorksheet(-1, [op.name], [sourceIndex])
-      if (copied === false) return fail('copy-failed', 'asc_copyWorksheet returned false', { sheet: op.sheet, name: op.name, sourceIndex: sourceIndex })
-      if (!getSheet(op.name)) return fail('verification-failed', 'asc_copyWorksheet returned without exposing the target worksheet', { sheet: op.sheet, name: op.name, sourceIndex: sourceIndex })
-      return { ok: true, outcome: 'ok', source: 'live-coedit-editor', operation: op.type, sheet: op.sheet, name: op.name, sourceIndex: sourceIndex, dispatchApi: 'asc_copyWorksheet' }
+      return unsupported(op.type, 'sheet.copy requires the outer spreadsheet editor API and is dispatched by runOperationInFrame')
     }
 
     if (op.type === 'sheet.move') {
@@ -133,7 +109,48 @@ function operationCommand(op) {
   }
 }
 
+async function runNativeSheetCopyInFrame(frame, apiHely, operation, timeoutMs = 15000) {
+  return frame.evaluate(async ({ u, op, timeout }) => {
+    const e = u === 'window.editor' ? window.editor : (window.Asc || {}).editor
+    const fail = (outcome, error, extra) => Object.assign({ ok: false, outcome, source: 'live-coedit-editor', error, operation: 'sheet.copy' }, extra || {})
+    if (!e || typeof e.asc_copyWorksheet !== 'function') return fail('unsupported', 'spreadsheet editor asc_copyWorksheet is unavailable')
+    if (!op?.sheet || !op?.name) return fail('invalid-operation', 'sheet and name are required')
+    const inventory = await new Promise((resolve) => {
+      let settled = false
+      const finish = value => { if (!settled) { settled = true; resolve(value) } }
+      try {
+        e.callCommand(new Function(`try{if(typeof Api==='undefined'||!Api||typeof Api.GetSheets!=='function')return {ok:false,outcome:'unsupported',error:'Api.GetSheets is unavailable'};var a=Api.GetSheets()||[],names=[];for(var i=0;i<a.length;i++){var s=a[i];names.push(s&&typeof s.GetName==='function'?s.GetName():null)}return {ok:true,names:names}}catch(err){return {ok:false,outcome:'operation-error',error:String(err&&err.message?err.message:err)}}`), false, value => finish(value))
+      } catch (err) { finish({ ok:false, outcome:'callcommand-dobott', error:String(err&&err.message||err) }) }
+      setTimeout(() => finish({ ok:false, outcome:'callback-timeout', error:'sheet copy inventory callback timed out' }), timeout)
+    })
+    if (!inventory?.ok) return fail(inventory?.outcome || 'inventory-failed', inventory?.error || 'could not resolve live worksheet inventory')
+    const names = inventory.names || []
+    const hits = []
+    for (let i=0;i<names.length;i++) if (names[i]===op.sheet) hits.push(i)
+    if (hits.length !== 1) return fail('sheet-identity-ambiguous', 'source worksheet identity is not unique at dispatch boundary', { sheet:op.sheet, count:hits.length })
+    if (names.includes(op.name)) return fail('already-exists', 'target worksheet name already exists', { sheet:op.name })
+    const sourceIndex = hits[0]
+    let ret
+    try { ret = e.asc_copyWorksheet(-1, [op.name], [sourceIndex]) }
+    catch (err) { return fail('operation-error', String(err&&err.message||err), { sheet:op.sheet, name:op.name, sourceIndex }) }
+    if (ret === false) return fail('copy-failed', 'asc_copyWorksheet returned false', { sheet:op.sheet, name:op.name, sourceIndex })
+    const deadline = Date.now()+timeout
+    while (Date.now() <= deadline) {
+      const count = typeof e.asc_getWorksheetsCount === 'function' ? e.asc_getWorksheetsCount() : null
+      if (typeof e.asc_getWorksheetName === 'function' && Number.isInteger(count)) {
+        let targetCount=0
+        for(let i=0;i<count;i++) if(e.asc_getWorksheetName(i)===op.name) targetCount++
+        if(targetCount===1)return {ok:true,outcome:'ok',source:'live-coedit-editor',operation:'sheet.copy',sheet:op.sheet,name:op.name,sourceIndex,dispatchApi:'asc_copyWorksheet'}
+        if(targetCount>1)return fail('verification-failed','target worksheet identity became ambiguous',{sheet:op.sheet,name:op.name,sourceIndex,targetCount})
+      }
+      await new Promise(r=>setTimeout(r,25))
+    }
+    return fail('verification-failed','asc_copyWorksheet returned without exposing the target worksheet',{sheet:op.sheet,name:op.name,sourceIndex})
+  }, { u: apiHely, op: operation, timeout: timeoutMs })
+}
+
 async function runOperationInFrame(frame, apiHely, operation, timeoutMs = 15000) {
+  if (operation?.type === 'sheet.copy') return runNativeSheetCopyInFrame(frame, apiHely, operation, timeoutMs)
   const body = `return (${operationCommand.toString()})(${JSON.stringify(operation)});`
   return frame.evaluate(({ u, timeout, commandBody }) => new Promise((resolve) => {
     const editor = u === 'window.editor' ? window.editor : (window.Asc || {}).editor
@@ -175,4 +192,4 @@ async function runOperationLive({ url, user, pass, fileId, operation, loadPlaywr
   } finally { await browser.close().catch(() => {}) }
 }
 
-module.exports = { operationCommand, runOperationInFrame, runOperationLive }
+module.exports = { operationCommand, runNativeSheetCopyInFrame, runOperationInFrame, runOperationLive }
