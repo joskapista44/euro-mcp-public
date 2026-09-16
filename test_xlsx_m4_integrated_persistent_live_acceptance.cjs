@@ -60,14 +60,14 @@ async function executeAgentTask(api,sheet,setup){
  const allNoOp=steps.every(x=>x.result.noOp===true)
  return {ok:true,outcome:allNoOp?'m4-integrated-already-satisfied':'m4-integrated-live-verified',authority:'LIVE_VERIFY',noOp:allNoOp,steps,wholeTaskVerification}
 }
-function compact(r){return {ok:r.ok,outcome:r.outcome,authority:r.authority,noOp:r.noOp,writes:r.persistentSession?.writes,barrier:r.persistentSession?.persistenceBarrier?.ok,failedStep:r.failedStep,wholeTaskVerification:r.wholeTaskVerification&&{ok:r.wholeTaskVerification.ok,outcome:r.wholeTaskVerification.outcome,failedCheck:r.wholeTaskVerification.failedCheck,checks:r.wholeTaskVerification.checks?.map(x=>({name:x.name,ok:x.result.ok,authority:x.result.authority,noOp:x.result.noOp}))},steps:r.steps?.map(x=>({name:x.name,ok:x.result.ok,outcome:x.result.outcome,authority:x.result.authority,noOp:x.result.noOp}))}}
+function compact(r){return {ok:r.ok,outcome:r.outcome,authority:r.authority,noOp:r.noOp,oneEditorSession:r.persistentSession?.oneEditorSession,writes:r.persistentSession?.writes,barrier:r.persistentSession?.persistenceBarrier?.ok,failedStep:r.failedStep,wholeTaskVerification:r.wholeTaskVerification&&{ok:r.wholeTaskVerification.ok,outcome:r.wholeTaskVerification.outcome,failedCheck:r.wholeTaskVerification.failedCheck,checks:r.wholeTaskVerification.checks?.map(x=>({name:x.name,ok:x.result.ok,authority:x.result.authority,noOp:x.result.noOp}))},steps:r.steps?.map(x=>({name:x.name,ok:x.result.ok,outcome:x.result.outcome,authority:x.result.authority,noOp:x.result.noOp}))}}
 ;(async()=>{
  const sheet=`EURO M4 ${String(Date.now()).slice(-7)}`
  const first=await persistent.withPersistentXlsxSession(options,api=>executeAgentTask(api,sheet,true))
- console.log('M4 INTEGRATED FIRST',JSON.stringify(compact(first),null,2))
- assert.equal(first.ok,true);assert.equal(first.authority,'LIVE_VERIFY');assert.equal(first.noOp,false);assert.equal(first.wholeTaskVerification?.ok,true);assert.equal(first.persistentSession?.writes,8);assert.equal(first.persistentSession?.persistenceBarrier?.ok,true)
+ console.log('M4 TASK 1 APPLY (ONE EDITOR SESSION)',JSON.stringify(compact(first),null,2))
+ assert.equal(first.ok,true);assert.equal(first.authority,'LIVE_VERIFY');assert.equal(first.noOp,false);assert.equal(first.wholeTaskVerification?.ok,true);assert.equal(first.persistentSession?.oneEditorSession,true);assert.equal(first.persistentSession?.writes,8);assert.equal(first.persistentSession?.persistenceBarrier?.ok,true)
  const retry=await persistent.withPersistentXlsxSession(options,api=>executeAgentTask(api,sheet,false))
- console.log('M4 INTEGRATED RETRY',JSON.stringify(compact(retry),null,2))
- assert.equal(retry.ok,true);assert.equal(retry.authority,'LIVE_VERIFY');assert.equal(retry.noOp,true);assert.equal(retry.wholeTaskVerification?.ok,true);assert.equal(retry.persistentSession?.writes,0);assert.equal(retry.persistentSession?.persistenceBarrier,null)
+ console.log('M4 TASK 2 IDEMPOTENT REINVOCATION (NEW ONE-EDITOR SESSION)',JSON.stringify(compact(retry),null,2))
+ assert.equal(retry.ok,true);assert.equal(retry.authority,'LIVE_VERIFY');assert.equal(retry.noOp,true);assert.equal(retry.wholeTaskVerification?.ok,true);assert.equal(retry.persistentSession?.oneEditorSession,true);assert.equal(retry.persistentSession?.writes,0);assert.equal(retry.persistentSession?.persistenceBarrier,null)
  console.log('XLSX M4 INTEGRATED PERSISTENT LIVE ACCEPTANCE: PASS')
 })().catch(e=>{console.error(e?.stack||e);process.exitCode=1})
