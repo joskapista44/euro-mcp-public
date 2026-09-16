@@ -1,0 +1,15 @@
+'use strict'
+const assert=require('assert')
+const {validateCopyDependencies,copyProducedSheet,resolveCopyDependency}=require('./xlsx-copy-dependency-contract.cjs')
+function ops(a){return a.map((x,index)=>({index,...x}))}
+const good=ops([{intent:'copy_sheet',sheet:'Source',name:'Copy'},{intent:'write_range',sheet:'Copy',range:'A1',values:[[1]]},{intent:'rename_sheet',sheet:'Copy',name:'Final'}])
+assert.equal(validateCopyDependencies(good).ok,true)
+assert.equal(copyProducedSheet('Copy',1,good).index,0)
+assert.equal(resolveCopyDependency('Copy',1,good,{sheets:[{name:'Copy'}]}).ok,true)
+assert.equal(resolveCopyDependency('Copy',1,good,{sheets:[]}).outcome,'xlsx-copy-dependent-target-missing')
+assert.equal(validateCopyDependencies(ops([{intent:'copy_sheet',sheet:'A',name:'A'}])).outcome,'xlsx-task-invalid-copy')
+assert.equal(validateCopyDependencies(ops([{intent:'copy_sheet',sheet:'A',name:'B'},{intent:'copy_sheet',sheet:'C',name:'B'}])).outcome,'xlsx-task-copy-target-conflict')
+assert.equal(validateCopyDependencies(ops([{intent:'delete_sheet',sheet:'A'},{intent:'copy_sheet',sheet:'A',name:'B'}])).outcome,'xlsx-task-copy-source-deleted-before-copy')
+assert.equal(validateCopyDependencies(ops([{intent:'copy_sheet',sheet:'A',name:'B'},{intent:'delete_sheet',sheet:'B'}])).outcome,'xlsx-task-copy-then-delete-not-supported')
+assert.equal(validateCopyDependencies(ops([{intent:'copy_sheet',sheet:'A',name:'B'},{intent:'copy_sheet',sheet:'B',name:'C'}])).outcome,'xlsx-task-copy-from-copy-not-supported')
+console.log('XLSX COPY DEPENDENCY CONTRACT STATIC: PASS')
