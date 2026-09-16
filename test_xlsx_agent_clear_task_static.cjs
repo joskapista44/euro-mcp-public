@@ -1,0 +1,4 @@
+'use strict'
+const assert=require('assert'),{executeClearTask}=require('./xlsx-agent-clear-task.cjs')
+const inv={ok:true,authority:'LIVE_READ',sheets:[{name:'A',index:0}]},blank={ok:true,authority:'LIVE_READ',cells:[[{dataType:'blank',value:null,formula:null}]]}
+;(async()=>{let reads=0;const r=await executeClearTask({task:{operations:[{intent:'clear_range',sheet:'A',range:'A1'}]},api:{inspect:async()=>inv,readRange:async()=>{reads++;return blank}}});assert.equal(r.ok,true);assert.equal(r.authority,'LIVE_VERIFY');assert.equal(r.noOp,true);assert.equal(reads,3);const bad=await executeClearTask({task:{operations:[{intent:'clear_range',sheet:'A',range:''}]},api:{}});assert.equal(bad.ok,false);assert.equal(bad.authority,'PLAN_ONLY');console.log('XLSX AGENT CLEAR TASK STATIC: PASS')})().catch(e=>{console.error(e);process.exitCode=1})
