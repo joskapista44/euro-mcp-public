@@ -1,0 +1,10 @@
+'use strict'
+const assert=require('assert'),v=require('./xlsx-structural-range-verifier.cjs')
+const read=cells=>({ok:true,authority:'LIVE_READ',cells}),x=n=>({value:n}),z=()=>({value:'',formula:null,dataType:'blank'})
+let r=v.verifyRowsInsert(read([[x(1),x(2)],[x(3),x(4)]]),read([[z(),z()],[x(1),x(2)],[x(3),x(4)]]));assert.equal(r.ok,true)
+r=v.verifyRowsDelete(read([[x(1),x(2)],[x(3),x(4)],[x(5),x(6)]]),read([[x(3),x(4)],[x(5),x(6)]]));assert.equal(r.ok,true)
+r=v.verifyColumnsInsert(read([[x(1),x(2)],[x(3),x(4)]]),read([[z(),x(1),x(2)],[z(),x(3),x(4)]]));assert.equal(r.ok,true)
+r=v.verifyColumnsDelete(read([[x(1),x(2),x(3)],[x(4),x(5),x(6)]]),read([[x(2),x(3)],[x(5),x(6)]]));assert.equal(r.ok,true)
+r=v.verifyRowsInsert(read([[x(1)]]),read([[x(9)],[x(1)]]));assert.equal(r.ok,false);assert.equal(r.outcome,'rows-insert-new-row-not-blank')
+r=v.verifyColumnsDelete(read([[x(1),x(2)]]),read([[x(1)]]));assert.equal(r.ok,false);assert.equal(r.outcome,'columns-delete-shift-mismatch')
+console.log('XLSX STRUCTURAL RANGE VERIFIER STATIC: PASS')
