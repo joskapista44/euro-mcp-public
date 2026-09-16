@@ -1,4 +1,5 @@
 'use strict'
-function blank(cell){return !cell?.formula&&(cell?.dataType==='blank'||cell?.rawValue===null||cell?.rawValue===undefined||cell?.rawValue===''||cell?.value===null||cell?.value===undefined||cell?.value==='')}
+function hasFormula(cell){return typeof cell?.formula==='string'&&cell.formula.trim()!==''}
+function blank(cell){if(hasFormula(cell))return false;const typeBlank=cell?.dataType==='blank';const rawBlank=cell?.rawValue===null||cell?.rawValue===undefined||cell?.rawValue==='';const valueBlank=cell?.value===null||cell?.value===undefined||cell?.value==='';return typeBlank||rawBlank&&valueBlank}
 function verifyRangeClearSemantic(read){if(!read?.ok||read.authority!=='LIVE_READ'||!Array.isArray(read.cells))return {ok:false,outcome:'range-clear-live-read-required',authority:'LIVE_READ'};for(let r=0;r<read.cells.length;r++){if(!Array.isArray(read.cells[r]))return {ok:false,outcome:'range-clear-invalid-readback',authority:'LIVE_READ',row:r};for(let c=0;c<read.cells[r].length;c++)if(!blank(read.cells[r][c]))return {ok:false,outcome:'range-clear-semantic-mismatch',authority:'LIVE_READ',row:r,column:c,cell:read.cells[r][c]}}return {ok:true,outcome:'range-clear-live-verified',authority:'LIVE_VERIFY'}}
-module.exports={blank,verifyRangeClearSemantic}
+module.exports={hasFormula,blank,verifyRangeClearSemantic}
