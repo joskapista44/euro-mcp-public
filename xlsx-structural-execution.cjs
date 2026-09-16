@@ -1,0 +1,10 @@
+'use strict'
+const verifier=require('./xlsx-structural-range-verifier.cjs'),obs=require('./xlsx-structural-observation.cjs')
+const VERIFY={
+ 'rows.insert':verifier.verifyRowsInsert,
+ 'rows.delete':verifier.verifyRowsDelete,
+ 'columns.insert':verifier.verifyColumnsInsert,
+ 'columns.delete':verifier.verifyColumnsDelete
+}
+async function executeVerified(api,op){const initial=await api.inspect();if(!initial?.ok||initial.authority!=='LIVE_READ')return {ok:false,outcome:'xlsx-structural-initial-inventory-failed',authority:'PLAN_ONLY'};const window=obs.observation(initial,op);if(!window.ok)return window;const before=await api.readRange({sheet:op.sheet,range:window.before});if(!before?.ok||before.authority!=='LIVE_READ')return {ok:false,outcome:'xlsx-structural-before-read-failed',authority:'PLAN_ONLY',window,before};const dispatched=await api.dispatchStructural(op);if(!dispatched?.ok)return {ok:false,outcome:'xlsx-structural-dispatch-failed',authority:'DISPATCH_ONLY',window,before,dispatched};const after=await api.readRange({sheet:op.sheet,range:window.after});if(!after?.ok||after.authority!=='LIVE_READ')return {ok:false,outcome:'xlsx-structural-after-read-failed',authority:'DISPATCH_ONLY',window,before,dispatched,after};const fn=VERIFY[op.type];if(!fn)return {ok:false,outcome:'xlsx-structural-verifier-missing',authority:'LIVE_READ'};const verified=fn(before,after,op.count);if(!verified.ok)return {ok:false,outcome:'xlsx-structural-semantic-mismatch',authority:'LIVE_READ',window,before,dispatched,after,verification:verified};const final=await api.inspect();if(!final?.ok||final.authority!=='LIVE_READ'||(final.sheets||[]).filter(s=>s?.name===op.sheet).length!==1)return {ok:false,outcome:'xlsx-structural-final-inventory-failed',authority:'PRIMITIVE_LIVE_VERIFY_ONLY',window,before,dispatched,after,verification:verified,final};return {ok:true,outcome:'xlsx-structural-live-verified',authority:'LIVE_VERIFY',noOp:false,writeAllowed:true,operation:op,window,verification:verified,freshBoundaryCount:2}}
+module.exports={executeVerified}
