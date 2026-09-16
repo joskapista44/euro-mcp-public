@@ -1,0 +1,11 @@
+'use strict'
+const assert=require('assert')
+const {executeAgentTaskInPersistentSession,withPersistentXlsxSession}=require('./xlsx-persistent-session.cjs')
+const FILE_ID=Number(process.env.EURO_XLSX_PERSISTENT_FILE_ID||1231187)
+process.env.EURO_PLAYWRIGHT_PATH=process.env.EURO_PLAYWRIGHT_PATH||'/home/user/marveen/node_modules/playwright'
+function secret(id){const v=require('/home/user/marveen/dist/web/vault.js');const r=v.getSecret(id,'xlsx-persistent-sheet-move-live-acceptance');if(!r)throw new Error(`vault secret not found: ${id}`);return r}
+const credentials={url:process.env.EURO_NEXTCLOUD_URL||'https://mt-server.eu',user:process.env.EURO_NEXTCLOUD_USER||'elliot',pass:secret('Elliot_nc_pass')}
+const sessionOptions={url:credentials.url,user:credentials.user,pass:credentials.pass,fileId:FILE_ID,timeoutMs:30000,pollMs:50}
+async function setup(task){return executeAgentTaskInPersistentSession({fileId:FILE_ID,task,credentials,timeoutMs:30000,pollMs:50})}
+async function move(sheet,referenceSheet,position){return withPersistentXlsxSession(sessionOptions,async api=>{const r=await api.moveSheetVerified(sheet,referenceSheet,position);return {...r,noOp:r?.noOp===true}})}
+;(async()=>{const id=String(Date.now()).slice(-7),a=`EURO Move A ${id}`,b=`EURO Move B ${id}`;console.log(`A=${a}\nB=${b}`);const s=await setup({operations:[{intent:'create_sheet',name:a},{intent:'create_sheet',name:b}]});console.log('=== MOVE SETUP ===');console.log(JSON.stringify(s,null,2));assert.equal(s.ok,true);assert.equal(s.authority,'LIVE_VERIFY');const applied=await move(b,a,'before');console.log('=== MOVE APPLIED ===');console.log(JSON.stringify(applied,null,2));assert.equal(applied.ok,true);assert.equal(applied.authority,'LIVE_VERIFY');assert.equal(applied.noOp,false);assert.equal(applied.persistentSession.writes,1);assert.equal(applied.persistentSession.persistenceBarrier?.ok,true);const retry=await move(b,a,'before');console.log('=== MOVE RETRY ===');console.log(JSON.stringify(retry,null,2));assert.equal(retry.ok,true);assert.equal(retry.authority,'LIVE_VERIFY');assert.equal(retry.noOp,true);assert.equal(retry.persistentSession.writes,0);assert.equal(retry.persistentSession.persistenceBarrier,null);console.log('XLSX PERSISTENT SHEET MOVE LIVE ACCEPTANCE: PASS')})().catch(e=>{console.error(e);process.exitCode=1})
