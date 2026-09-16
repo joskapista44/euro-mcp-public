@@ -23,7 +23,6 @@ async function classifyCopyChainRetry({plan,api,inventory}){
  const source=sheetMeta(inventory,copy.sheet),intermediate=sheetMeta(inventory,copy.name),target=sheetMeta(inventory,terminal)
  if(!source.ok||intermediate.count!==0||!target.ok)return {matched:false}
  const writes=writesForCopy(copy,plan.operations)
- if(!writes.length)return {matched:false}
  const sourceUsed=parseRange(source.sheet.usedRange),targetUsed=parseRange(target.sheet.usedRange),parsedWrites=writes.map(w=>({...w,parsed:parseRange(w.range)}))
  if(!sourceUsed||!targetUsed)return {matched:true,ok:false,outcome:'xlsx-copy-chain-retry-used-range-unparseable',authority:'LIVE_READ',writeAllowed:false,sourceRange:source.sheet.usedRange||null,targetRange:target.sheet.usedRange||null}
  if(parsedWrites.some(w=>!w.parsed))return {matched:true,ok:false,outcome:'xlsx-copy-chain-retry-write-range-unparseable',authority:'LIVE_READ',writeAllowed:false}
