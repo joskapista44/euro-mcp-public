@@ -39,7 +39,10 @@ The following paths have direct runtime acceptance on the persistent-session bra
 - range.copy primitive and agent-grade copy_range, including coordinate-bound v3 persisted retry;
 - range.move primitive and hardened agent-grade move_range, including source+target OCC retry and overlap rejection;
 - insert_rows, delete_rows, insert_columns, delete_columns under the documented usedRange full-span structural contract, including values, formulas and coordinate-bound persisted retry;
-- format_range standalone agent-grade task for the measured semantic contract (bold, italic, font name/size, horizontal alignment, wrap and number format), including persistent-session save barrier and proven persisted retry no-op. Formatting readback uses the live editor model where the public ApiRange exposes setters but not corresponding getters.
+- format_range standalone agent-grade task for the measured semantic contract (bold, italic, font name/size, horizontal alignment, wrap and number format), including persistent-session save barrier and proven persisted retry no-op. Formatting readback uses the live editor model where the public ApiRange exposes setters but not corresponding getters;
+- M4.3 row/column layout: column width, row height, hide/show columns and rows, each with same-session semantic readback, persistence barrier and persisted no-op retry;
+- M4.3 AutoFit columns and rows using the measured direct-range `AutoFit(bRows,bCols)` runtime contract, with operation-bound before/post dimensions, persistence barrier and persisted retry no-op;
+- M4.3 insert/delete rows and columns through the already accepted agent-grade structural operations, under the documented usedRange full-span contract.
 
 ## Fail-closed hardening already covered
 
@@ -54,7 +57,8 @@ The following paths have direct runtime acceptance on the persistent-session bra
 - malformed/jagged/coordinate-less structural observations rejected;
 - range.copy coordinate-bound v3 fingerprints;
 - copy-chain expanded usedRange gaps must be semantically blank;
-- format_range refuses properties without a semantic verification contract (including border in the current agent-grade task contract) and fails closed if requested formatting cannot be measured.
+- format_range refuses properties without a semantic verification contract (including border in the current agent-grade task contract) and fails closed if requested formatting cannot be measured;
+- AutoFit retry is bound to the operation plus measured before/post dimensions and fails closed if the current dimension matches neither accepted state.
 
 ## Current contract limitations, not hidden PASS
 
@@ -68,20 +72,19 @@ The structural four-operation contract is the measured full-span operation over 
 
 ### Formatting
 
-The current `format_range` TRUE LIVE PASS covers only properties for which the deployed editor provides stable semantic readback. It is not a blanket M4 formatting/layout/conditional-formatting PASS. Border formatting is deliberately rejected by the current agent task contract until semantic readback is proven; conditional formatting and broader layout operations remain separate migration work.
+The current `format_range` TRUE LIVE PASS covers only properties for which the deployed editor provides stable semantic readback. It is not yet a blanket M4 formatting/conditional-formatting PASS. Border formatting remains deliberately rejected until semantic readback is proven. Extended color/vertical-alignment acceptance, M4.4 merge/unmerge, M4.6 conditional formatting and freeze panes are currently being migrated/tested.
 
 ## Power User capabilities not yet migrated into the agent task vocabulary
 
 The repository already has LIVE implementations/acceptances for capabilities outside the current W0.12-style agent task vocabulary. They are not automatically agent-grade merely because their earlier Power User acceptance is green. Remaining migration candidates include:
 
-- remaining M4 layout/conditional-formatting families beyond the accepted `format_range` subset;
+- the remaining M4 formatting/structure/conditional-formatting/freeze-panes work listed above;
 - M5 chart families;
 - M6.1 sort/filter;
 - M6.2 data validation;
 - M6.3 defined names;
 - M6.4 pivot tables;
-- M7 protected-range ACL core;
-- freeze panes and other earlier layout capabilities.
+- M7 protected-range ACL core.
 
 Each candidate needs an explicit task intent contract, fresh identity/read semantics, semantic verifier, whole-task proof, persistence behavior and retry/no-op/conflict semantics before being marked agent-grade.
 
@@ -97,8 +100,8 @@ These remain governed by `EXCEL-POWER-USER-CAPABILITY-GAPS.md` and must not be p
 
 ## Next migration order
 
-1. Remove/deprecate the now-redundant dedicated copy-chain persistent wrapper after compatibility/static checks.
-2. Continue M4 with bounded layout capabilities whose state can be semantically read back; keep conditional formatting separate.
+1. Complete the remaining implementable M4 agent-grade contracts: extended formatting/borders, merge/unmerge, conditional formatting and freeze panes. Keep M4.5 explicitly runtime-DEFERRED unless the deployed runtime changes.
+2. Run one integrated M4 persistent-session acceptance and persisted retry regression before declaring M4 closed.
 3. Migrate sort/filter, data validation and defined names one family at a time into explicit agent-grade contracts.
 4. Keep charts, pivots and protected-range ACL as explicit object-identity tasks with their own verifiers rather than reducing them to callback success.
 5. Finish with a cross-capability persistent-session acceptance and update the capability gap register without converting documented runtime blockers to implementation failures.
