@@ -1,21 +1,27 @@
 'use strict'
 function layoutObserveCommand(spec,apply){
   function has(o,n){return !!o&&typeof o[n]==='function'}
-  function bad(outcome,error){return {ok:false,outcome,source:'live-coedit-editor',authority:'LIVE_READ',error}}
+  function bad(outcome,error,extra){return Object.assign({ok:false,outcome,source:'live-coedit-editor',authority:'LIVE_READ',error},extra||{})}
   try{
     if(!spec||!spec.sheet||!spec.range||!spec.type)return bad('invalid-layout-spec','sheet, range and type are required')
     const sh=has(Api,'GetSheet')?Api.GetSheet(spec.sheet):null;if(!sh)return bad('sheet-not-found','sheet not found')
     const r=has(sh,'GetRange')?sh.GetRange(spec.range):null;if(!r)return bad('range-not-found','range not found')
-    const col=spec.type==='column.width'||spec.type==='columns.hidden'||spec.type==='columns.autofit', row=spec.type==='row.height'||spec.type==='rows.hidden'||spec.type==='rows.autofit'
+    const col=spec.type==='column.width'||spec.type==='columns.hidden', row=spec.type==='row.height'||spec.type==='rows.hidden'
     const t=col&&has(r,'GetEntireColumn')?r.GetEntireColumn():row&&has(r,'GetEntireRow')?r.GetEntireRow():r
     const eq=(a,b)=>typeof b==='number'?typeof a==='number'&&Math.abs(a-b)<=0.05:a===b
     if(spec.type==='columns.autofit'||spec.type==='rows.autofit'){
-      const getter=spec.type==='columns.autofit'?'GetColumnWidth':'GetRowHeight',setter=spec.type==='columns.autofit'?'AutoFit':'AutoFit'
-      if(!has(t,getter)||!has(t,setter))return bad('layout-readback-unavailable',getter+' or '+setter+' unavailable')
-      const actual=t[getter]();
-      if(!apply){if(Number.isFinite(spec.expectedDimension))return {ok:true,outcome:eq(actual,spec.expectedDimension)?'layout-already-satisfied':'layout-mismatch',source:'live-coedit-editor',authority:'LIVE_READ',noOp:eq(actual,spec.expectedDimension),actual,expected:spec.expectedDimension};return {ok:true,outcome:'layout-autofit-ready',source:'live-coedit-editor',authority:'LIVE_READ',noOp:false,actual}}
-      const before=actual;t[setter]();const after=t[getter]();
-      if(!Number.isFinite(before)||!Number.isFinite(after)||eq(before,after))return bad('layout-autofit-unverifiable','AutoFit did not produce a measurable dimension change')
+      const isColumns=spec.type==='columns.autofit',getter=isColumns?'GetColumnWidth':'GetRowHeight'
+      // Measured 9.3.4.60 runtime contract: AutoFit must be invoked on the
+      // direct ApiWorksheet.GetRange() object with (bRows,bCols).  The derived
+      // GetEntireColumn/GetEntireRow object can expose AutoFit without applying
+      // the mutation.
+      if(!has(r,getter)||!has(r,'AutoFit'))return bad('layout-readback-unavailable',getter+' or AutoFit unavailable')
+      const before=r[getter]()
+      if(!apply){if(Number.isFinite(spec.expectedDimension))return {ok:true,outcome:eq(before,spec.expectedDimension)?'layout-already-satisfied':'layout-mismatch',source:'live-coedit-editor',authority:'LIVE_READ',noOp:eq(before,spec.expectedDimension),actual:before,expected:spec.expectedDimension};return {ok:true,outcome:'layout-autofit-ready',source:'live-coedit-editor',authority:'LIVE_READ',noOp:false,actual:before}}
+      r.AutoFit(!isColumns,isColumns)
+      const after=r[getter]()
+      if(!Number.isFinite(after)||after<=0)return bad('layout-autofit-unverifiable','AutoFit completed but resulting dimension is not measurable',{before,actual:after})
+      if(eq(before,after))return bad('layout-autofit-unchanged','AutoFit completed but measured dimension did not change; without a bound post-state this is UNKNOWN',{before,actual:after})
       return {ok:true,outcome:'layout-live-verified',source:'live-coedit-editor',authority:'LIVE_VERIFY',noOp:false,before,actual:after,expected:after,applied:[spec.type],verification:{status:'PASS',before,actual:after}}
     }
     let getter,setter,expected
