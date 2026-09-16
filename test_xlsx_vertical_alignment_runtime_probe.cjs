@@ -39,6 +39,6 @@ async function runCommand(session,sheet){
     const deleted=await api.deleteSheetVerified(sheet)
     return {ok:measured.ok&&deleted.ok,outcome:measured.outcome,authority:measured.ok&&deleted.ok?'LIVE_VERIFY':'LIVE_READ',noOp:false,created,measured,deleted}
   })
-  console.log('XLSX VERTICAL ALIGNMENT RUNTIME PROBE',JSON.stringify(result,null,2))
+  console.log('XLSX VERTICAL ALIGNMENT RUNTIME PROBE',JSON.stringify({ok:result.ok,outcome:result.outcome,authority:result.authority,writes:result.persistentSession?.writes,barrier:result.persistentSession?.persistenceBarrier?.ok,results:result.measured?.results||null},null,2))
   assert.equal(result.ok,true)
 })().catch(e=>{console.error(e?.stack||e);process.exitCode=1})
