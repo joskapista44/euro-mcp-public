@@ -1,0 +1,7 @@
+'use strict'
+const crypto=require('crypto'),FP=/^[0-9a-f]{64}$/i
+function identity(op){return {version:1,type:op?.type||null,sheet:op?.sheet||null,range:op?.range||null,count:op?.count||null,anchor:op?.anchor||null,axis:op?.axis||null}}
+function operationFingerprint(op){return crypto.createHash('sha256').update(JSON.stringify(identity(op))).digest('hex')}
+function make(op,beforeFingerprint,postFingerprint){if(!FP.test(beforeFingerprint||'')||!FP.test(postFingerprint||''))return null;return {version:1,operationFingerprint:operationFingerprint(op),beforeFingerprint:beforeFingerprint.toLowerCase(),postFingerprint:postFingerprint.toLowerCase()}}
+function validate(token,op){if(!token||token.version!==1||!FP.test(token.operationFingerprint||'')||!FP.test(token.beforeFingerprint||'')||!FP.test(token.postFingerprint||''))return {ok:false,outcome:'xlsx-structural-retry-token-invalid',authority:'PLAN_ONLY'};const expected=operationFingerprint(op);if(token.operationFingerprint.toLowerCase()!==expected)return {ok:false,outcome:'xlsx-structural-retry-token-operation-mismatch',authority:'PLAN_ONLY',expectedOperationFingerprint:expected,actualOperationFingerprint:token.operationFingerprint.toLowerCase()};return {ok:true,outcome:'xlsx-structural-retry-token-valid',authority:'PLAN_ONLY',operationFingerprint:expected,beforeFingerprint:token.beforeFingerprint.toLowerCase(),postFingerprint:token.postFingerprint.toLowerCase()}}
+module.exports={identity,operationFingerprint,make,validate}
