@@ -1,6 +1,7 @@
 'use strict'
 const {normalizeFormula}=require('./verification-contract.cjs')
 function formula(v){const n=normalizeFormula(v);return typeof n==='string'&&n.trim()!==''?(n.startsWith('=')?n:'='+n):null}
-function same(a,b){const af=formula(a?.formula),bf=formula(b?.formula);if(af||bf)return af===bf;return Object.is(a?.rawValue,b?.rawValue)||Object.is(a?.value,b?.value)||String(a?.displayText??'')===String(b?.displayText??'')}
+function valueOf(cell){if(Object.prototype.hasOwnProperty.call(cell||{},'rawValue'))return cell.rawValue;if(Object.prototype.hasOwnProperty.call(cell||{},'value'))return cell.value;return cell?.displayText}
+function same(a,b){const af=formula(a?.formula),bf=formula(b?.formula);if(af||bf)return af===bf;return Object.is(valueOf(a),valueOf(b))}
 function verifyRangeCopySemantic(source,target){if(!source?.ok||source.authority!=='LIVE_READ'||!target?.ok||target.authority!=='LIVE_READ'||!Array.isArray(source.cells)||!Array.isArray(target.cells))return {ok:false,outcome:'range-copy-live-read-required',authority:'LIVE_READ'};if(source.cells.length!==target.cells.length)return {ok:false,outcome:'range-copy-shape-mismatch',authority:'LIVE_READ'};for(let r=0;r<source.cells.length;r++){if(!Array.isArray(source.cells[r])||!Array.isArray(target.cells[r])||source.cells[r].length!==target.cells[r].length)return {ok:false,outcome:'range-copy-shape-mismatch',authority:'LIVE_READ',row:r};for(let c=0;c<source.cells[r].length;c++)if(!same(source.cells[r][c],target.cells[r][c]))return {ok:false,outcome:'range-copy-semantic-mismatch',authority:'LIVE_READ',row:r,column:c,source:source.cells[r][c],target:target.cells[r][c]}}return {ok:true,outcome:'range-copy-live-verified',authority:'LIVE_VERIFY'}}
-module.exports={formula,same,verifyRangeCopySemantic}
+module.exports={formula,valueOf,same,verifyRangeCopySemantic}
