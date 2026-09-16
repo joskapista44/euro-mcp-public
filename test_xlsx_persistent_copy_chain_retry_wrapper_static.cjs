@@ -1,0 +1,12 @@
+'use strict'
+const assert=require('assert')
+const fs=require('fs')
+const wrapper=fs.readFileSync(require.resolve('./xlsx-persistent-copy-chain.cjs'),'utf8')
+const live=fs.readFileSync(require.resolve('./test_xlsx_persistent_copy_chain_retry_live_acceptance.cjs'),'utf8')
+assert.match(wrapper,/classifyCopyChainRetry/)
+assert.match(wrapper,/if\(retry\.matched\)return/)
+assert.match(wrapper,/agentTask\.executeTask/)
+assert.match(live,/xlsx-copy-chain-task-already-satisfied/)
+assert.match(live,/persistenceBarrier,null/)
+assert.match(live,/writes,0/)
+console.log('XLSX PERSISTENT COPY CHAIN RETRY WRAPPER STATIC: PASS')
