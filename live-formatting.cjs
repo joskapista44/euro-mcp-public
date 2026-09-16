@@ -23,7 +23,7 @@ function validateFormatSpec(spec) {
   if (spec.border != null) {
     if (typeof spec.border !== 'object' || Array.isArray(spec.border)) return { ok: false, outcome: 'invalid-format', error: 'border must be an object' }
     if (!['Top','Bottom','Left','Right','InsideHorizontal','InsideVertical','DiagonalDown','DiagonalUp'].includes(spec.border.index)) return { ok: false, outcome: 'invalid-format', error: 'invalid border.index' }
-    if (typeof spec.border.style !== 'string' || !spec.border.style) return { ok: false, outcome: 'invalid-format', error: 'border.style must be a non-empty string' }
+    if (!['None','Double','Hair','DashDotDot','DashDot','Dotted','Dashed','Thin','MediumDashDotDot','SlantDashDot','MediumDashDot','MediumDashed','Medium','Thick'].includes(spec.border.style)) return { ok: false, outcome: 'invalid-format', error: 'invalid border.style' }
   }
   if (!Object.keys(spec).length) return { ok: false, outcome: 'invalid-format', error: 'format must contain at least one property' }
   return { ok: true }
