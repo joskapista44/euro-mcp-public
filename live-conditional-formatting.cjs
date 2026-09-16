@@ -42,10 +42,11 @@ function conditionalFormattingCommand(spec) {
   }
   function inventory(fc) {
     var n=fc.GetCount(), out=[]
-    for(var i=0;i<n;i++){ var r=null; try{r=fc.GetItem(i)}catch(_){}; if(!r){try{r=fc.GetItem(i+1)}catch(_){}}; out.push(describe(r,i)) }
+    for(var i=0;i<n;i++){ var r=null; try{r=fc.GetItem(i+1)}catch(_){}; out.push(describe(r,i)) }
     return out
   }
   function same(a,b){ return String(a==null?'':a)===String(b==null?'':b) }
+  function normAddress(v){var s=String(v==null?'':v).replace(/\$/g,'').toUpperCase(),bang=s.lastIndexOf('!');return bang>=0?s.slice(bang+1):s}
   try {
     if(!spec||typeof spec!=='object') return fail('invalid-operation','spec is required')
     if(!spec.sheet||!spec.range) return fail('invalid-operation','sheet and range are required')
@@ -70,12 +71,14 @@ function conditionalFormattingCommand(spec) {
       if(spec.rule.formula1!=null&&!same(actual.formula1,spec.rule.formula1))mismatch.push('formula1')
       if(spec.rule.formula2!=null&&!same(actual.formula2,spec.rule.formula2))mismatch.push('formula2')
       if(spec.rule.priority!=null&&!same(actual.priority,spec.rule.priority))mismatch.push('priority')
+      if(spec.rule.fillColor){var actualFill=actual.fillColor,expectedFill=((spec.rule.fillColor[0]<<16)|(spec.rule.fillColor[1]<<8)|spec.rule.fillColor[2])>>>0;if(typeof actualFill==='number'?actualFill!==expectedFill:String(actualFill||'').replace('#','').toLowerCase()!==spec.rule.fillColor.map(function(n){return n.toString(16).padStart(2,'0')}).join('').toLowerCase())mismatch.push('fillColor')}
+      if(normAddress(actual.appliesTo)!==normAddress(spec.range))mismatch.push('appliesTo')
       return mismatch.length?fail('verification-failed','live conditional-formatting readback mismatch',{beforeCount:before,afterCount:after,actual:actual,mismatches:mismatch}):{ok:true,outcome:'ok',source:'live-coedit-editor',operation:spec.type,sheet:spec.sheet,range:spec.range,beforeCount:before,afterCount:after,actual:actual,verification:{status:'PASS',expected:spec.rule,actual:actual}}
     }
     if(spec.type==='cf.delete') {
       var beforeRules=inventory(fc), index=spec.index==null?0:Number(spec.index)
       if(!Number.isInteger(index)||index<0||index>=beforeRules.length)return fail('invalid-operation','index is outside live rule inventory',{count:beforeRules.length})
-      var target=null; try{target=fc.GetItem(index)}catch(_){}; if(!target){try{target=fc.GetItem(index+1)}catch(_){}}
+      var target=null; try{target=fc.GetItem(index+1)}catch(_){}
       if(!target||!has(target,'Delete'))return fail('unsupported','ApiFormatCondition.Delete is unavailable')
       target.Delete(); var afterRules=inventory(fc)
       if(afterRules.length!==beforeRules.length-1)return fail('verification-failed','rule count did not decrease after delete',{before:beforeRules,after:afterRules})
