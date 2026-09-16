@@ -38,7 +38,8 @@ The following paths have direct runtime acceptance on the persistent-session bra
 - clear_range standalone agent-grade task, including retry;
 - range.copy primitive and agent-grade copy_range, including coordinate-bound v3 persisted retry;
 - range.move primitive and hardened agent-grade move_range, including source+target OCC retry and overlap rejection;
-- insert_rows, delete_rows, insert_columns, delete_columns under the documented usedRange full-span structural contract, including values, formulas and coordinate-bound persisted retry.
+- insert_rows, delete_rows, insert_columns, delete_columns under the documented usedRange full-span structural contract, including values, formulas and coordinate-bound persisted retry;
+- format_range standalone agent-grade task for the measured semantic contract (bold, italic, font name/size, horizontal alignment, wrap and number format), including persistent-session save barrier and proven persisted retry no-op. Formatting readback uses the live editor model where the public ApiRange exposes setters but not corresponding getters.
 
 ## Fail-closed hardening already covered
 
@@ -52,7 +53,8 @@ The following paths have direct runtime acceptance on the persistent-session bra
 - structural coordinate-bound fingerprints;
 - malformed/jagged/coordinate-less structural observations rejected;
 - range.copy coordinate-bound v3 fingerprints;
-- copy-chain expanded usedRange gaps must be semantically blank.
+- copy-chain expanded usedRange gaps must be semantically blank;
+- format_range refuses properties without a semantic verification contract (including border in the current agent-grade task contract) and fails closed if requested formatting cannot be measured.
 
 ## Current contract limitations, not hidden PASS
 
@@ -64,11 +66,15 @@ The current sheet-copy verifier proves unique source/target identity, usedRange 
 
 The structural four-operation contract is the measured full-span operation over current usedRange. It must not be described as proof of unrestricted entire-worksheet row/column semantics.
 
+### Formatting
+
+The current `format_range` TRUE LIVE PASS covers only properties for which the deployed editor provides stable semantic readback. It is not a blanket M4 formatting/layout/conditional-formatting PASS. Border formatting is deliberately rejected by the current agent task contract until semantic readback is proven; conditional formatting and broader layout operations remain separate migration work.
+
 ## Power User capabilities not yet migrated into the agent task vocabulary
 
 The repository already has LIVE implementations/acceptances for capabilities outside the current W0.12-style agent task vocabulary. They are not automatically agent-grade merely because their earlier Power User acceptance is green. Remaining migration candidates include:
 
-- M4 formatting/layout/conditional-formatting families;
+- remaining M4 layout/conditional-formatting families beyond the accepted `format_range` subset;
 - M5 chart families;
 - M6.1 sort/filter;
 - M6.2 data validation;
@@ -92,7 +98,7 @@ These remain governed by `EXCEL-POWER-USER-CAPABILITY-GAPS.md` and must not be p
 ## Next migration order
 
 1. Remove/deprecate the now-redundant dedicated copy-chain persistent wrapper after compatibility/static checks.
-2. Migrate one already-LIVE Power User family at a time into explicit agent-grade task contracts rather than widening the generic executor implicitly.
-3. Prefer families with stable public semantic readback and bounded identity: formatting/layout, sort/filter, data validation, defined names.
+2. Continue M4 with bounded layout capabilities whose state can be semantically read back; keep conditional formatting separate.
+3. Migrate sort/filter, data validation and defined names one family at a time into explicit agent-grade contracts.
 4. Keep charts, pivots and protected-range ACL as explicit object-identity tasks with their own verifiers rather than reducing them to callback success.
 5. Finish with a cross-capability persistent-session acceptance and update the capability gap register without converting documented runtime blockers to implementation failures.
