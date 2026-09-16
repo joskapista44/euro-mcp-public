@@ -12,13 +12,13 @@ function secret(id){const v=require('/home/user/marveen/dist/web/vault.js');cons
 const credentials={url:process.env.EURO_NEXTCLOUD_URL||'https://mt-server.eu',user:process.env.EURO_NEXTCLOUD_USER||'elliot',pass:secret('Elliot_nc_pass')}
 const options={url:credentials.url,user:credentials.user,pass:credentials.pass,fileId:FILE_ID,timeoutMs:30000,pollMs:50}
 function adapters(api){
- const mark=r=>{if(r?.ok&&!r.noOp)api.session.markWrite();return r}
+ function written(r,apply){if(apply&&r?.ok&&!r.noOp)api.session.markWrite();return r}
  return {
-  format:{...api,formatRangeObserved:async spec=>mark(await formatPersistent.runCommand(api.session,[spec.sheet,spec.range,spec.format,!!spec.apply]))},
-  layout:{...api,layoutObserved:async(spec,apply)=>mark(await layoutPersistent.runCommand(api.session,spec,apply))},
-  merge:{...api,mergeObserved:async(spec,apply)=>mark(await mergePersistent.runCommand(api.session,spec,apply))},
+  format:{...api,formatRangeObserved:async spec=>written(await formatPersistent.runCommand(api.session,[spec.sheet,spec.range,spec.format,!!spec.apply]),!!spec.apply)},
+  layout:{...api,layoutObserved:async(spec,apply)=>written(await layoutPersistent.runCommand(api.session,spec,apply),apply)},
+  merge:{...api,mergeObserved:async(spec,apply)=>written(await mergePersistent.runCommand(api.session,spec,apply),apply)},
   cf:{...api,cfObserved:async spec=>{const r=await cfPersistent.runCommand(api.session,spec),out={...r,authority:cfPersistent.authorityFor(spec,r)};if(spec.type!=='cf.inspect'&&out.ok&&out.authority==='LIVE_VERIFY')api.session.markWrite();return out}},
-  freeze:{...api,freezeObserved:async(op,apply)=>mark(await freezePersistent.runCommand(api.session,op,apply))}
+  freeze:{...api,freezeObserved:async(op,apply)=>written(await freezePersistent.runCommand(api.session,op,apply),apply)}
  }
 }
 function operations(sheet){
