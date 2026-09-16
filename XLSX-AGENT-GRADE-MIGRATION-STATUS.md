@@ -60,6 +60,17 @@ The following paths have direct runtime acceptance on the persistent-session bra
 - format_range refuses properties without a semantic verification contract (including border in the current agent-grade task contract) and fails closed if requested formatting cannot be measured;
 - AutoFit retry is bound to the operation plus measured before/post dimensions and fails closed if the current dimension matches neither accepted state.
 
+## Implemented and STATIC PASS; awaiting integrated TRUE LIVE acceptance
+
+- extended format_range readback for font color, fill color and vertical alignment, with the upstream ONLYOFFICE vertical enum (bottom=0, center=1, distributed=2, justify=3, top=4);
+- border formatting verifier for all eight supported border positions, all upstream line-style enum values and RGB readback through the live internal cell model;
+- merge/unmerge with secondary-cell data-loss protection and a fresh range-state fingerprint immediately before mutation;
+- conditional-format add/delete with the upstream one-based rule collection contract, exact AppliesTo identity, fill-color readback and ambiguity rejection;
+- freeze rows, columns, range and unfreeze through exact GetLocation bbox semantics;
+- a two-editor-session integrated M4 acceptance: one persistent setup/edit/readback task with a single persistence barrier, followed by a persisted all-no-op retry.
+
+These are not listed under TRUE LIVE PASS until the integrated runtime acceptance succeeds on the deployed 9.3.4.60 editor.
+
 ## Current contract limitations, not hidden PASS
 
 ### Sheet copy
@@ -72,7 +83,7 @@ The structural four-operation contract is the measured full-span operation over 
 
 ### Formatting
 
-The current `format_range` TRUE LIVE PASS covers only properties for which the deployed editor provides stable semantic readback. It is not yet a blanket M4 formatting/conditional-formatting PASS. Border formatting remains deliberately rejected until semantic readback is proven. Extended color/vertical-alignment acceptance, M4.4 merge/unmerge, M4.6 conditional formatting and freeze panes are currently being migrated/tested.
+The current `format_range` TRUE LIVE PASS covers only properties for which the deployed editor provides stable semantic readback. It is not yet a blanket M4 formatting/conditional-formatting PASS. Border formatting now has a source-backed semantic verifier but remains outside TRUE LIVE PASS until runtime acceptance. Extended color/vertical-alignment, M4.4 merge/unmerge, M4.6 conditional formatting and freeze panes are implemented and STATIC PASS, pending integrated runtime acceptance.
 
 ## Power User capabilities not yet migrated into the agent task vocabulary
 
