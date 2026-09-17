@@ -186,6 +186,12 @@ User-reported advanced result at `2110aac`: `XLSX CHART MCP LIVE ACCEPTANCE: PAS
 
 User-reported chart lifecycle result at `55dcd4c`: `XLSX CHART MCP LIVE ACCEPTANCE: PASS`. Exact named rename used one editor session, 1 verified write and one successful save barrier; persisted rename retry used 0 writes and no barrier. Measured open/task times were 2858/1142 ms for rename and 2843/68 ms for retry. Together with the set/delete gates this closes every implementable M5.4 chart operation; copy/duplicate remains documented runtime-UNSUPPORTED.
 
-### Pivot refresh MCP — STATIC PASS, TRUE LIVE pending
+### Pivot refresh MCP — STATIC PASS and TRUE LIVE PASS
 
-`refresh_pivot` now uses the existing unique pivot name plus source-coordinate/style/field-count fingerprint and required public `GetData` assertions. If those assertions already match, retry is a proven no-op. Otherwise the observer rechecks unchanged live state, calls public `RefreshTable`, verifies the requested semantic totals, runs the batch-wide read-only verification, then lets the single owning session perform one save barrier. No fixed delay or second editor session is introduced. The dedicated MCP runtime gate updates one source value, refreshes to a new asserted total, retries at 0 writes, and removes the generated pivot sheet.
+`refresh_pivot` uses the existing unique pivot name plus source-coordinate/style/field-count fingerprint and required public `GetData` assertions. If those assertions already match, retry is a proven no-op. Otherwise the observer rechecks unchanged live state, calls public `RefreshTable`, verifies the requested semantic totals, runs the batch-wide read-only verification, then lets the single owning session perform one save barrier. No fixed delay or second editor session is introduced.
+
+User-reported result at `21ecbc8`: `XLSX PIVOT REFRESH MCP LIVE ACCEPTANCE: PASS`. Setup used one session and 3 writes. The refresh invocation changed one source value and refreshed the pivot in one session with exactly 2 writes and one successful save barrier; persisted retry reopened once, proved both source value and pivot totals already satisfied, used 0 writes and no barrier. Cleanup removed the generated pivot sheet with 1 write. Measured open/task times were 3086/1371 ms (setup), 2744/1220 ms (refresh), 2738/248 ms (retry) and 2681/1191 ms (cleanup).
+
+### Final Excel Power User MCP gate — prepared, TRUE LIVE pending
+
+The final gate composes 13 natural-retry-safe goals in one real `office_xlsx_batch` call: sheet move, range clear, formatting, fixed layout, merge, freeze, sort, filter, durable validation, defined name, conditional formatting, pivot creation and an advanced named chart. It then reopens the same final-state request and requires 0 writes and no save barrier. Operation-bound retry-token families remain deliberately separate; runtime-deferred/unsupported capabilities remain exclusions rather than false failures.
