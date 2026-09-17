@@ -17,25 +17,41 @@ function filterObserveCommand(spec){
   }
   return {measurable:true,present:!!rg,range:rg&&has(rg,'GetAddress')?normAddr(rg.GetAddress()):null,filterMode:af&&has(af,'GetFilterMode')?af.GetFilterMode():false,filters:filters}
  }
- function matches(state){
+ function matchesSet(state){
   if(!state.measurable||!state.present||state.range!==normAddr(spec.range)||state.filters.length!==1)return false
   var f=state.filters[0];return f.field===spec.field&&String(f.operator)==String(spec.operator)&&same(f.criteria1,spec.criteria1)&&same(f.criteria2,spec.criteria2==null?null:spec.criteria2)
  }
+ function matchesClear(state){return !!state.measurable&&(!state.present||state.range===normAddr(spec.range))&&state.filterMode!==true&&state.filters.length===0}
  try{
-  if(!spec||typeof spec.sheet!=='string'||typeof spec.range!=='string'||!Number.isInteger(spec.field)||spec.field<1||spec.criteria1==null)return {ok:false,outcome:'invalid-filter-spec',source:'live-coedit-editor'}
+  var intent=spec&&spec.intent||'filter_range'
+  if(!spec||typeof spec.sheet!=='string'||typeof spec.range!=='string'||(intent!=='filter_range'&&intent!=='clear_filter'))return {ok:false,outcome:'invalid-filter-spec',source:'live-coedit-editor'}
+  if(intent==='filter_range'&&(!Number.isInteger(spec.field)||spec.field<1||spec.criteria1==null))return {ok:false,outcome:'invalid-filter-spec',source:'live-coedit-editor'}
   var sh=has(Api,'GetSheet')?Api.GetSheet(spec.sheet):null,r=sh&&has(sh,'GetRange')?sh.GetRange(spec.range):null
-  if(!r||!has(r,'SetAutoFilter'))return {ok:false,outcome:'filter-api-unavailable',source:'live-coedit-editor'}
+  if(!sh||!r)return {ok:false,outcome:'filter-api-unavailable',source:'live-coedit-editor'}
+  if(intent==='filter_range'&&!has(r,'SetAutoFilter'))return {ok:false,outcome:'filter-api-unavailable',source:'live-coedit-editor'}
   var before=read(sh)
   if(!before.measurable)return {ok:false,outcome:'filter-state-unverifiable',source:'live-coedit-editor',state:before}
   if(before.present&&before.range!==normAddr(spec.range))return {ok:false,outcome:'filter-range-conflict',source:'live-coedit-editor',state:before}
-  var satisfied=matches(before)
+  if(intent==='clear_filter'){
+   var cleared=matchesClear(before)
+   if(!spec.apply)return {ok:true,outcome:cleared?'filter-clear-already-satisfied':'filter-clear-observed',source:'live-coedit-editor',noOp:cleared,state:before,verification:{measurable:true,match:cleared}}
+   if(cleared)return {ok:true,outcome:'filter-clear-already-satisfied',source:'live-coedit-editor',noOp:true,state:before,verification:{measurable:true,match:true}}
+   var af=has(sh,'GetAutoFilter')?sh.GetAutoFilter():null
+   if(!af||!has(af,'ShowAllData'))return {ok:false,outcome:'filter-clear-api-unavailable',source:'live-coedit-editor',state:before}
+   af.ShowAllData()
+   var clearAfter=read(sh)
+   if(!clearAfter.measurable)return {ok:false,outcome:'filter-post-state-unverifiable',source:'live-coedit-editor',before:before,state:clearAfter}
+   var clearPass=matchesClear(clearAfter)
+   return {ok:clearPass,outcome:clearPass?'filter-clear-live-verified':'filter-clear-semantic-mismatch',source:'live-coedit-editor',noOp:false,applied:true,before:before,state:clearAfter,verification:{measurable:true,match:clearPass}}
+  }
+  var satisfied=matchesSet(before)
   if(!spec.apply)return {ok:true,outcome:satisfied?'filter-already-satisfied':'filter-observed',source:'live-coedit-editor',noOp:satisfied,state:before,verification:{measurable:true,match:satisfied}}
   if(satisfied)return {ok:true,outcome:'filter-already-satisfied',source:'live-coedit-editor',noOp:true,state:before,verification:{measurable:true,match:true}}
   if(before.filters.length&&!(before.filters.length===1&&before.filters[0].field===spec.field))return {ok:false,outcome:'filter-other-field-conflict',source:'live-coedit-editor',state:before}
   r.SetAutoFilter(spec.field,spec.criteria1,spec.operator,spec.criteria2==null?undefined:spec.criteria2)
   var after=read(sh)
   if(!after.measurable)return {ok:false,outcome:'filter-post-state-unverifiable',source:'live-coedit-editor',before:before,state:after}
-  var pass=matches(after)
+  var pass=matchesSet(after)
   return {ok:pass,outcome:pass?'filter-live-verified':'filter-semantic-mismatch',source:'live-coedit-editor',noOp:false,applied:true,before:before,state:after,verification:{measurable:true,match:pass}}
  }catch(e){return {ok:false,outcome:'filter-operation-error',source:'live-coedit-editor',error:String(e&&e.message||e)}}
 }
