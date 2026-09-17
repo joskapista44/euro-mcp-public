@@ -63,7 +63,7 @@ The following paths have direct runtime acceptance on the persistent-session bra
 
 ## Integrated M4 TRUE LIVE acceptance
 
-The previously pending extended-format, border, merge/unmerge, conditional-format and freeze contracts are now accepted for the exact tested semantic surface. The integrated result proves the W0.12 invariant per task invocation: one task = one persistent editor session, with same-session readback and whole-task verification. The persisted retry is a second task invocation, not a second session inside the first task.
+The previously pending extended-format, border, `merge_range`, conditional-format and freeze contracts are now accepted for the exact tested semantic surface. `unmerge_range` remains implemented and STATIC PASS but still requires its own TRUE LIVE acceptance. The integrated result proves the W0.12 invariant per task invocation: one task = one persistent editor session, with same-session readback and whole-task verification. The persisted retry is a second task invocation, not a second session inside the first task.
 
 ## Current contract limitations, not hidden PASS
 
@@ -77,7 +77,7 @@ The structural four-operation contract is the measured full-span operation over 
 
 ### Formatting
 
-The current `format_range` TRUE LIVE PASS covers only properties for which the deployed editor provides stable semantic readback. It is not yet a blanket M4 formatting/conditional-formatting PASS. Border formatting now has a source-backed semantic verifier but remains outside TRUE LIVE PASS until runtime acceptance. Extended color/vertical-alignment, M4.4 merge/unmerge, M4.6 conditional formatting and freeze panes are implemented and STATIC PASS, pending integrated runtime acceptance.
+The current `format_range` TRUE LIVE PASS covers only properties for which the deployed editor provides stable semantic readback. Extended color/vertical-alignment, borders, `merge_range`, the tested M4.6 conditional-format rule surface and freeze-at-range are TRUE LIVE accepted by the integrated run. This is not a blanket acceptance of every possible formatting, conditional-formatting, freeze, or merge variant. `unmerge_range` remains STATIC PASS pending dedicated TRUE LIVE acceptance.
 
 ## Power User capabilities not yet migrated into the agent task vocabulary
 
@@ -105,7 +105,7 @@ These remain governed by `EXCEL-POWER-USER-CAPABILITY-GAPS.md` and must not be p
 
 ## Next migration order
 
-1. Keep M4.5 explicitly runtime-DEFERRED unless the deployed runtime changes; the remaining implementable M4 agent-grade contracts are TRUE LIVE accepted.
+1. Run dedicated `unmerge_range` TRUE LIVE acceptance; keep M4.5 explicitly runtime-DEFERRED unless the deployed runtime changes.
 2. Migrate sort/filter, data validation and defined names one family at a time into explicit agent-grade contracts.
 3. Keep charts, pivots and protected-range ACL as explicit object-identity tasks with their own verifiers rather than reducing them to callback success.
 4. Finish with a cross-capability persistent-session acceptance and update the capability gap register without converting documented runtime blockers to implementation failures.
