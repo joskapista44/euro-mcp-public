@@ -45,6 +45,7 @@ The following paths have direct runtime acceptance on the persistent-session bra
 - M4.3 insert/delete rows and columns through the already accepted agent-grade structural operations, under the documented usedRange full-span contract.
 - M4 integrated agent-grade persistent execution on FILE_ID 1231187 at tested HEAD `0d06fc9c63bff528d875b4bb1554d7e3b148499f`: extended formatting, border, layout, merge, conditional formatting and freeze all passed primitive `LIVE_VERIFY`, followed by a fresh same-session whole-task verification where all six effects classified as satisfied. Task invocation 1 used exactly one editor session, performed 8 verified writes, used one successful persistence barrier and closed. The separate persisted retry invocation used exactly one new editor session, classified all six effects as no-op, performed 0 writes, used no persistence barrier and closed. Acceptance: `XLSX M4 INTEGRATED PERSISTENT LIVE ACCEPTANCE: PASS`, exit 0.
 - `unmerge_range` dedicated TRUE LIVE acceptance on FILE_ID 1231187 at tested HEAD `3867e0c77d882edde674460b90ee126a6d73d93d`: task invocation 1 used one editor session, performed fixture preparation plus merge/unmerge as 4 verified writes, completed fresh same-session whole-task verification, used one successful persistence barrier and closed. The separate idempotent retry used one new editor session, performed 0 writes, completed whole-task verification, used no barrier and closed. Acceptance: `XLSX PERSISTENT UNMERGE LIVE ACCEPTANCE: PASS`.
+- M6.1 `sort_range` agent-grade TRUE LIVE acceptance on FILE_ID 1231187 at tested HEAD `851e55c4cb33c9770533bd2ab62902e53570a041`: task invocation 1 used one editor session, performed create/write/sort as 3 verified writes, proved exact ordered keys `Alpha, Bravo, Charlie, Delta`, completed same-session whole-task verification, used one persistence barrier and closed. The separate retry used one new editor session, classified the requested ordering as already satisfied, performed 0 writes, used no barrier and closed. Static regression and LIVE acceptance both PASS.
 
 ## Fail-closed hardening already covered
 
@@ -92,7 +93,7 @@ The existing M6.1 implementation remains a valid primitive-level LIVE PASS, but 
 - reapply reports before/after state without a semantic requested-final-state assertion;
 - there is no task-level whole-state verifier, change receipt, single save-completion barrier, or persisted retry contract.
 
-Migration will proceed one semantic family at a time: sort first, then filter. The old direct-Playwright acceptance must not be used as agent-grade authority.
+Migration proceeds one semantic family at a time. Sort is now agent-grade TRUE LIVE accepted. Filter remains primitive-only until exact range, field, operator and criteria identity can be proven. The old direct-Playwright acceptance must not be used as agent-grade authority.
 
 ## Power User capabilities not yet migrated into the agent task vocabulary
 
