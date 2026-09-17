@@ -19,7 +19,7 @@ async function firstInvocation(api,sheet){
  return filterAgent.executeFilterTask({task:clearTask(sheet),api:liveApi(api)})
 }
 function exactClear(r){const s=r?.wholeTaskVerification?.state;return Array.isArray(s?.filters)&&s.filters.length===0&&(!s.present||s.range==='A1:C5')}
-function d(r){return {ok:r.ok,outcome:r.outcome,authority:r.authority,noOp:r.noOp,oneEditorSession:r.persistentSession?.oneEditorSession,writes:r.persistentSession?.writes,barrier:r.persistentSession?.persistenceBarrier?.ok,wholeTaskVerification:r.wholeTaskVerification}}
+function d(r){return {ok:r.ok,outcome:r.outcome,authority:r.authority,noOp:r.noOp,oneEditorSession:r.persistentSession?.oneEditorSession,writes:r.persistentSession?.writes,barrier:r.persistentSession?.persistenceBarrier?.ok,wholeTaskVerification:r.wholeTaskVerification,diagnostic:r.ok?undefined:{pre:r.pre,applied:r.applied,final:r.final}}}
 ;(async()=>{
  const sheet=`EURO FCLR ${String(Date.now()).slice(-7)}`
  const first=await persistent.withPersistentXlsxSession(options,api=>firstInvocation(api,sheet))
