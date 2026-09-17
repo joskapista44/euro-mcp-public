@@ -2,6 +2,7 @@
 const assert=require('assert')
 const batch=require('./xlsx-persistent-batch.cjs')
 const sort=require('./xlsx-persistent-sort.cjs')
+const cf=require('./xlsx-persistent-conditional-format.cjs')
 ;(async()=>{
  const op={intent:'sort_range',sheet:'S',range:'A1:B3',keyRange:'A1:A3'}
  assert.equal(batch.planTask({operations:[op,{...op,order:'desc'}]}).outcome,'xlsx-batch-conflicting-goals')
@@ -22,6 +23,20 @@ const sort=require('./xlsx-persistent-sort.cjs')
  assert.equal(coreFirst.ok,true);assert.equal(coreFirst.noOp,false);assert.equal(coreWrites,2);assert.equal(coreFirst.wholeTaskVerification.checks.length,2)
  const coreRetry=await batch.executeBatchTask({task:coreTask,api:coreApi})
  assert.equal(coreRetry.ok,true);assert.equal(coreRetry.noOp,true);assert.equal(coreWrites,2)
+ const indexed=batch.planTask({operations:[...coreTask.operations,{intent:'format_range',sheet:'N',range:'A1:B1',format:{bold:true}},{intent:'set_defined_name',name:'N_R',refersTo:'=N!$A$1'}]})
+ assert.deepEqual(indexed.steps.map(s=>s.operations?.map(x=>x.index)||s.operation.index),[[0,1],2,3])
+ const originalCf=cf.runCommand;let cfPresent=false,cfWrites=0
+ const cfRule={type:'xlCellValue',operator:'xlGreater',formula1:'5',fillColor:[1,2,3]}
+ cf.runCommand=async(_session,spec)=>{
+  if(spec.type==='cf.inspect')return {ok:true,rules:cfPresent?[{...cfRule,fillColor:66051,appliesTo:'A1:A3',index:0}]:[],count:cfPresent?1:0}
+  cfPresent=true;return {ok:true,verification:{status:'PASS'}}
+ }
+ try{
+  const cfApi={session:{markWrite(){cfWrites++}},inspect:async()=>({ok:true,authority:'LIVE_READ',sheets:[{name:'S'}]}),readRange:async()=>({ok:true,authority:'LIVE_READ'})}
+  const cfTask={operations:[{intent:'add_conditional_format',sheet:'S',range:'A1:A3',rule:cfRule}]}
+  const cfFirst=await batch.executeBatchTask({task:cfTask,api:cfApi});assert.equal(cfFirst.ok,true);assert.equal(cfFirst.noOp,false);assert.equal(cfWrites,1)
+  const cfRetry=await batch.executeBatchTask({task:cfTask,api:cfApi});assert.equal(cfRetry.ok,true);assert.equal(cfRetry.noOp,true);assert.equal(cfWrites,1)
+ }finally{cf.runCommand=originalCf}
  const original=sort.runCommand
  let ordered=false,writes=0,applyCalls=0
  const session={markWrite(){writes++}}
