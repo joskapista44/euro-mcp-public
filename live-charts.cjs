@@ -126,11 +126,15 @@ async function runChartInFrame(frame,apiHely,spec,timeoutMs=15000){
     await frame.evaluate(()=>window.focus())
     await frame.page().keyboard.press('Delete')
   }catch(err){return {ok:false,outcome:'operation-error',source:'live-coedit-editor',operation:spec.type,error:'editor Delete key dispatch failed',detail:String(err&&err.message?err.message:err),deleteVia:first.deleteVia,beforeCount:first.beforeCount}}
-  await new Promise(resolve=>setTimeout(resolve,250))
-  const after=await callChartCommand(frame,apiHely,{type:'chart.inspect',sheet:spec.sheet},timeoutMs)
-  if(!after||!after.ok)return {ok:false,outcome:'verification-unknown',source:'live-coedit-editor',operation:spec.type,error:'chart readback unavailable after editor Delete key',deleteVia:first.deleteVia,beforeCount:first.beforeCount,readback:after}
   const expected=Number(first.beforeCount)-1
-  const nameStillPresent=spec.name!=null&&Array.isArray(after.charts)&&after.charts.some(c=>String(c&&c.name)===String(spec.name))
+  const deadline=Date.now()+timeoutMs
+  let after=null,nameStillPresent=true
+  do{
+    after=await callChartCommand(frame,apiHely,{type:'chart.inspect',sheet:spec.sheet},Math.max(250,deadline-Date.now()))
+    if(!after||!after.ok)return {ok:false,outcome:'verification-unknown',source:'live-coedit-editor',operation:spec.type,error:'chart readback unavailable after editor Delete key',deleteVia:first.deleteVia,beforeCount:first.beforeCount,readback:after}
+    nameStillPresent=spec.name!=null&&Array.isArray(after.charts)&&after.charts.some(c=>String(c&&c.name)===String(spec.name))
+    if(after.count===expected&&!nameStillPresent)break
+  }while(Date.now()<deadline)
   if(after.count!==expected||nameStillPresent)return {ok:false,outcome:'verification-failed',source:'live-coedit-editor',operation:spec.type,error:nameStillPresent?'named chart still exists after editor Delete key':'chart count did not decrease after editor Delete key',deleteVia:first.deleteVia,beforeCount:first.beforeCount,afterCount:after.count,targetName:spec.name==null?null:String(spec.name),readback:after}
   return {ok:true,outcome:'ok',source:'live-coedit-editor',operation:spec.type,sheet:spec.sheet,deleted:first.deleted,deleteVia:first.deleteVia,beforeCount:first.beforeCount,afterCount:after.count,verification:{status:'PASS',expectedCount:expected,actualCount:after.count,nameAbsent:spec.name==null?null:true}}
 }

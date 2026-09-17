@@ -11,7 +11,8 @@ const definitions=[
  ['validation',['set_validation','clear_validation'],'Validation','validationObserved'],
  ['defined-name',['set_defined_name','rename_defined_name','delete_defined_name'],'DefinedName','definedNameObserved'],
  ['conditional-format',['add_conditional_format','delete_conditional_format'],'ConditionalFormat','cfObserved'],
- ['pivot',['create_pivot','delete_pivot_sheet'],'Pivot','pivotObserved']
+ ['pivot',['create_pivot','delete_pivot_sheet'],'Pivot','pivotObserved'],
+ ['chart',['set_chart','delete_chart'],'Chart','chartObserved']
 ]
 const core={
  file:'core',
@@ -99,7 +100,7 @@ function adapter(api,family,readOnly){
   const r=family.file==='format'
    ?await family.transport.runCommand(api.session,[spec.sheet,spec.range,spec.format,apply])
    :await family.transport.runCommand(api.session,spec,apply)
-  if(apply&&r?.ok&&!r.noOp)api.session.markWrite()
+  if(apply&&(family.file==='chart'?(r?.applied||r?.mutation?.ok):(r?.ok&&!r.noOp)))api.session.markWrite()
   return r
  }
  // Do not expose session or mutators to the family executors.
