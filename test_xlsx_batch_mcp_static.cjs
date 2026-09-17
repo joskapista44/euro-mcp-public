@@ -8,7 +8,7 @@ const {register}=require('./xlsx-batch-mcp.cjs')
  let credentials=0,calls=0,mode='ok'
  const auth={detectCallerId:()=>({ok:mode!=='caller',id:'agent'}),credentialsFor:async()=>{credentials++;return {ok:mode!=='credentials',url:'https://example.invalid',user:'agent',pass:'secret-test'}}}
  const server=new McpServer({name:'batch-test',version:'1'})
- register(server,{coedit:auth,execute:async options=>{calls++;assert.equal(options.pass,'secret-test');assert.equal(options.fileId,'123');assert.equal(options.task.operations[0].intent,'set_defined_name');if(mode==='throw')throw Error('secret-test');return {ok:mode!=='failure',authority:'LIVE_VERIFY',noOp:true}}})
+ register(server,{coedit:auth,execute:async options=>{calls++;assert.equal(options.pass,'secret-test');assert.equal(options.fileId,'123');assert(['set_defined_name','create_sheet'].includes(options.task.operations[0].intent));if(mode==='throw')throw Error('secret-test');return {ok:mode!=='failure',authority:'LIVE_VERIFY',noOp:true}}})
  const client=new Client({name:'test',version:'1'}),[a,b]=InMemoryTransport.createLinkedPair()
  await Promise.all([server.connect(a),client.connect(b)])
  const request={file_id:'123',operations:[{intent:'set_defined_name',name:'Report',refersTo:'=Sheet1!$A$1'}]}
@@ -21,6 +21,8 @@ const {register}=require('./xlsx-batch-mcp.cjs')
   mode='caller';assert.equal((await call(request)).isError,true);assert.equal(credentials,0)
   mode='credentials';assert.equal((await call(request)).isError,true);assert.equal(calls,0)
   mode='ok';const good=await call(request);assert.equal(good.isError,false);assert.equal(calls,1);assert(!JSON.stringify(good).includes('secret-test'))
+  const core=await call({file_id:'123',operations:[{intent:'create_sheet',name:'Input'},{intent:'write_range',sheet:'Input',range:'A1:B1',values:[['x',1]]}]})
+  assert.equal(core.isError,false);assert.equal(calls,2)
   mode='failure';assert.equal((await call(request)).isError,true)
   mode='throw';const failed=await call(request);assert.equal(failed.isError,true);assert(!JSON.stringify(failed).includes('secret-test'))
  }finally{await client.close();await server.close()}
