@@ -10,6 +10,8 @@ function planTask(task){
   return {ok:true,outcome:'xlsx-pivot-task-planned',authority:'PLAN_ONLY',writeAllowed:true,operation:{index:0,intent:op.intent,name:op.name,pivotSheet:op.pivotSheet}}
  }
  if(typeof op.sourceSheet!=='string'||!op.sourceSheet.trim())return {ok:false,outcome:'xlsx-pivot-task-source-sheet-required',authority:'PLAN_ONLY',writeAllowed:false}
+ // InsertPivotNewWorksheet concatenates the worksheet name without quoting.
+ if(!/^[A-Za-z_][A-Za-z0-9_]*$/.test(op.sourceSheet))return {ok:false,outcome:'xlsx-pivot-source-sheet-quoting-unsupported',authority:'PLAN_ONLY',writeAllowed:false}
  const range=parseA1Range(op.sourceRange);if(!range)return {ok:false,outcome:'xlsx-pivot-task-invalid-source-range',authority:'PLAN_ONLY',writeAllowed:false}
  for(const k of ['rowField','columnField','dataField','styleName'])if(typeof op[k]!=='string'||!op[k])return {ok:false,outcome:'xlsx-pivot-task-field-required',authority:'PLAN_ONLY',writeAllowed:false,field:k}
  if(!Array.isArray(op.assertions)||op.assertions.length<1||op.assertions.some(a=>!Array.isArray(a?.items)||!a.items.length||a.expected==null))return {ok:false,outcome:'xlsx-pivot-task-semantic-assertions-required',authority:'PLAN_ONLY',writeAllowed:false}
