@@ -9,7 +9,9 @@ const definitions=[
  ['sort',['sort_range'],'Sort','sortObserved'],
  ['filter',['filter_range','clear_filter'],'Filter','filterObserved'],
  ['validation',['set_validation','clear_validation'],'Validation','validationObserved'],
- ['defined-name',['set_defined_name','delete_defined_name'],'DefinedName','definedNameObserved']
+ ['defined-name',['set_defined_name','rename_defined_name','delete_defined_name'],'DefinedName','definedNameObserved'],
+ ['conditional-format',['add_conditional_format','delete_conditional_format'],'ConditionalFormat','cfObserved'],
+ ['pivot',['create_pivot','delete_pivot_sheet'],'Pivot','pivotObserved']
 ]
 const core={
  file:'core',
@@ -21,6 +23,11 @@ const families=definitions.map(([file,intents,fn,method])=>({
  file,intents,method,agent:require('./xlsx-agent-'+file+'-task.cjs'),
  transport:require('./xlsx-persistent-'+file+'.cjs'),execute:'execute'+fn+'Task'
 }))
+const {parseA1Range}=require('./range-reader.cjs')
+families.push(
+ {file:'clear',intents:['clear_range'],agent:require('./xlsx-agent-clear-task.cjs'),execute:'executeClearTask',planTask:task=>{const op=task?.operations?.[0],p=op?parseA1Range(op.range):null;return task?.operations?.length===1&&op?.intent==='clear_range'&&typeof op.sheet==='string'&&op.sheet.trim()&&p?{ok:true,operation:{index:0,intent:'clear_range',sheet:op.sheet,range:p.address}}:{ok:false,outcome:'xlsx-clear-task-invalid',authority:'PLAN_ONLY'}}},
+ {file:'move-sheet',intents:['move_sheet'],agent:require('./xlsx-agent-move-task.cjs'),execute:'executeMoveTask',planTask:task=>{const op=task?.operations?.[0],ok=task?.operations?.length===1&&op?.intent==='move_sheet'&&typeof op.sheet==='string'&&op.sheet.trim()&&typeof op.referenceSheet==='string'&&op.referenceSheet.trim()&&op.sheet!==op.referenceSheet&&['before','after'].includes(op.position);return ok?{ok:true,operation:{index:0,intent:'move_sheet',sheet:op.sheet,referenceSheet:op.referenceSheet,position:op.position}}:{ok:false,outcome:'xlsx-move-task-invalid',authority:'PLAN_ONLY'}}}
+)
 function planTask(task){
  if(!Array.isArray(task?.operations)||!task.operations.length||task.operations.length>100)return {ok:false,outcome:'xlsx-batch-invalid-operations',authority:'PLAN_ONLY'}
  const steps=[],targets=new Set()
@@ -38,13 +45,13 @@ function planTask(task){
   if(!family)return {ok:false,outcome:'xlsx-batch-unsupported-intent',authority:'PLAN_ONLY',index}
   // AutoFit needs operation-bound retry tokens; not yet composed here.
   if(family.file==='layout'&&family.agent.isAutoFit(op))return {ok:false,outcome:'xlsx-batch-autofit-not-supported',authority:'PLAN_ONLY',index}
-  const plan=family.agent.planTask({operations:[op]})
+  const plan=(family.planTask||family.agent.planTask)({operations:[op]})
   if(!plan.ok)return {...plan,index}
   // A conservative initial contract: one final-state goal per family per sheet,
   // or per workbook name. Avoid replaying overwritten intermediate goals.
   const target=family.file+':'+String(op.sheet||op.name).toLowerCase()
   if(targets.has(target))return {ok:false,outcome:'xlsx-batch-conflicting-goals',authority:'PLAN_ONLY',index}
-  targets.add(target);steps.push({index,family:family.file,operation:plan.operation})
+  targets.add(target);steps.push({index,family:family.file,operation:{...plan.operation,index}})
  }
  return {ok:true,outcome:'xlsx-batch-planned',authority:'PLAN_ONLY',steps}
 }
@@ -60,8 +67,18 @@ function coreAdapter(api,readOnly){
  }
 }
 function adapter(api,family,readOnly){
+ const blocked=async()=>({ok:false,outcome:'xlsx-batch-verification-write-blocked',authority:'PLAN_ONLY'})
+ if(family.file==='clear')return {inspect:api.inspect,readRange:api.readRange,session:readOnly?undefined:api.session}
+ if(family.file==='move-sheet')return {inspect:api.inspect,moveSheetVerified:readOnly?blocked:api.moveSheetVerified}
  const run=async(...args)=>{
   const spec=args[0],apply=family.file==='format'?!!spec.apply:!!args[1]
+  if(family.file==='conditional-format'){
+   const mutating=spec.type!=='cf.inspect'
+   if(readOnly&&mutating)return {ok:false,outcome:'xlsx-batch-verification-write-blocked',source:'live-coedit-editor',authority:'PLAN_ONLY'}
+   const r=await family.transport.runCommand(api.session,spec),out={...r,authority:family.transport.authorityFor(spec,r)}
+   if(mutating&&out.ok&&out.authority==='LIVE_VERIFY')api.session.markWrite()
+   return out
+  }
   if(readOnly&&apply)return {ok:false,outcome:'xlsx-batch-verification-write-blocked',source:'live-coedit-editor'}
   const r=family.file==='format'
    ?await family.transport.runCommand(api.session,[spec.sheet,spec.range,spec.format,apply])
