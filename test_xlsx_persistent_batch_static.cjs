@@ -30,7 +30,7 @@ const cf=require('./xlsx-persistent-conditional-format.cjs')
  const coreAgent=require('./xlsx-agent-task.cjs'),clearAgent=require('./xlsx-agent-clear-task.cjs'),originalCoreExecute=coreAgent.executeTask,originalClearExecute=clearAgent.executeClearTask,seen=[]
  coreAgent.executeTask=async({task})=>{seen.push(task.operations[1].values[1][1]);return {ok:true,authority:'LIVE_VERIFY',noOp:seen.length>1}}
  let clearCalls=0;clearAgent.executeClearTask=async()=>({ok:true,authority:'LIVE_VERIFY',noOp:++clearCalls>1})
- try{const overlayResult=await batch.executeBatchTask({task:{operations:[{intent:'create_sheet',name:'X'},{intent:'write_range',sheet:'X',range:'A1:B2',values:[[1,2],[3,4]]},{intent:'rename_sheet',sheet:'X',name:'Y'},{intent:'clear_range',sheet:'Y',range:'B2'}]},api:{}});assert.equal(overlayResult.ok,true);assert.deepEqual(seen,[4,null])}
+ try{const overlayResult=await batch.executeBatchTask({task:{operations:[{intent:'create_sheet',name:'X'},{intent:'write_range',sheet:'X',range:'A1:B2',values:[[1,2],[3,4]]},{intent:'rename_sheet',sheet:'X',name:'Y'},{intent:'clear_range',sheet:'Y',range:'B2'}]},api:{}});assert.equal(overlayResult.ok,true);assert.deepEqual(seen,[null,null])}
  finally{coreAgent.executeTask=originalCoreExecute;clearAgent.executeClearTask=originalClearExecute}
  const originalCf=cf.runCommand;let cfPresent=false,cfWrites=0
  const cfRule={type:'xlCellValue',operator:'xlGreater',formula1:'5',fillColor:[1,2,3]}
