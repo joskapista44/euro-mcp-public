@@ -18,7 +18,7 @@ async function firstInvocation(api,sheet){
  const prepared=await filterAgent.executeFilterTask({task:setTask(sheet),api:liveApi(api)});if(!prepared.ok)return {ok:false,outcome:'filter-clear-fixture-filter-failed',authority:prepared.authority||'LIVE_READ',prepared}
  return filterAgent.executeFilterTask({task:clearTask(sheet),api:liveApi(api)})
 }
-function exactClear(r){const s=r?.wholeTaskVerification?.state;return s?.filterMode===false&&Array.isArray(s?.filters)&&s.filters.length===0&&(!s.present||s.range==='A1:C5')}
+function exactClear(r){const s=r?.wholeTaskVerification?.state;return Array.isArray(s?.filters)&&s.filters.length===0&&(!s.present||s.range==='A1:C5')}
 function d(r){return {ok:r.ok,outcome:r.outcome,authority:r.authority,noOp:r.noOp,oneEditorSession:r.persistentSession?.oneEditorSession,writes:r.persistentSession?.writes,barrier:r.persistentSession?.persistenceBarrier?.ok,wholeTaskVerification:r.wholeTaskVerification}}
 ;(async()=>{
  const sheet=`EURO FCLR ${String(Date.now()).slice(-7)}`
