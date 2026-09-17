@@ -151,8 +151,14 @@ The packaged `euro-mcp-m44.cjs` entrypoint now registers `office_xlsx_batch` thr
 
 Example tool arguments: `{"file_id":"1231187","operations":[{"intent":"format_range","sheet":"Sheet1","range":"A1:B2","format":{"bold":true}}]}`. Production configuration uses `EURO_AGENT_ID`, the existing `EURO_COEDIT_AGENTS` allowlist, `EURO_COEDIT_NC_URL` and the caller-specific Nextcloud credentials. Do not use legacy primitive acceptances as evidence that every Power User capability has been migrated.
 
-### Core editing expansion — STATIC PASS, expanded LIVE pending
+### Core editing expansion — STATIC PASS and TRUE LIVE PASS
 
 The same `office_xlsx_batch` tool now also accepts `create_sheet`, `write_range`, `copy_sheet`, `rename_sheet` and `delete_sheet`. Core operations are planned together by the previously accepted generic agent task and must form a prefix before enhanced operations; this preserves create/write/rename dependency semantics while still using one editor session and one final read-only batch verification. MCP schemas reject intent-inapplicable fields. Static acceptance covers create+write, persisted no-op classification, ordering rejection and real MCP dispatch.
 
-The expanded stdio acceptance now requests create sheet → write range → rename sheet → format header → set defined name in one MCP task, expecting 5 verified writes and one save barrier, followed by a second MCP invocation with 0 writes and no barrier. This expanded runtime gate is pending. Copy/delete remain covered by their earlier dedicated TRUE LIVE acceptances but are not re-exercised in this combined fixture.
+The expanded stdio acceptance passed: create sheet → write range → rename sheet → format header → set defined name ran in one MCP task with exactly 5 verified writes and one successful save barrier. The second MCP invocation reopened the workbook and proved all five goals with 0 writes and no barrier. Measured open/task times were 3080/1580 ms for apply and 2761/302 ms for retry. Copy/delete remain covered by their earlier dedicated TRUE LIVE acceptances but are not re-exercised in this combined fixture.
+
+### Wider MCP batch candidate — STATIC PASS, LIVE pending
+
+The MCP vocabulary now additionally composes `move_sheet`, `clear_range`, defined-name rename, conditional-format add/delete and the narrow accepted pivot create/delete contract. Original task indexes are preserved in batch-level verification reports (fixing the prior cosmetic 0 indexes on enhanced operations). Static tests cover the conditional-format adapter, write blocking during final verification and original-index mapping.
+
+The next and intended final broad runtime gate combines nine goals in one MCP request: create, write, rename, move, clear, format, conditional format, defined name and pivot. Expected first invocation: one editor session, 9 verified writes and one save barrier. Expected persisted retry: one editor session, 0 writes and no barrier. Range move and structural insert/delete are intentionally not exposed through this natural-retry batch yet because their accepted contracts require operation-bound retry tokens; replaying them without the returned token could repeat a destructive mutation. AutoFit has the same token-bound constraint. Charts remain the major already-LIVE capability family still outside the W0.12 MCP vocabulary.
