@@ -14,7 +14,9 @@ function makeApi(names = ['Sheet1']) {
         if (!cells.has(address)) cells.set(address, {
           value: undefined, formula: undefined, cleared: false,
           SetValue(v) { this.value = v },
-          SetFormula(f) { this.formula = f },
+          set Formula(f) { this.formula = f },
+          get Formula() { return this.formula },
+          GetFormula() { return this.formula },
           Clear() { this.cleared = true; this.value = undefined; this.formula = undefined },
         })
         return cells.get(address)
@@ -75,7 +77,7 @@ function run(sheet, range, values, formulas, api, maxCells = 26000) {
 
 {
   const api = makeApi()
-  delete api.sheets.get('Sheet1').GetRange('A1').SetFormula
+  delete api.sheets.get('Sheet1').GetRange('A1').Formula
   const r = run('Sheet1', 'A1', [[0]], [['=1+1']], api)
   assert.equal(r.ok, false)
   assert.equal(r.outcome, 'unsupported')

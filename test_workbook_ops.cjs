@@ -54,8 +54,13 @@ function run(op, api) {
   assert.equal(run({ type: 'sheet.create', name: 'Sales' }, api).ok, true)
   assert.equal(run({ type: 'sheet.rename', sheet: 'Sales', name: 'Revenue' }, api).ok, true)
   assert.ok(sheets.has('Revenue'))
-  assert.equal(run({ type: 'sheet.copy', sheet: 'Revenue', name: 'Revenue Copy' }, api).ok, true)
-  assert.ok(sheets.has('Revenue Copy'))
+  const directCopy = run({ type: 'sheet.copy', sheet: 'Revenue', name: 'Revenue Copy' }, api)
+  assert.equal(directCopy.ok, false)
+  assert.equal(directCopy.outcome, 'unsupported')
+  assert.ok(!sheets.has('Revenue Copy'))
+  // Native worksheet copy is dispatched and verified by runOperationInFrame;
+  // keep the remaining move/delete unit coverage independent of that adapter.
+  api.AddSheet('Revenue Copy')
   api.AddSheet('Anchor')
   assert.equal(run({ type: 'sheet.move', sheet: 'Revenue Copy', position: 'before', referenceSheet: 'Anchor' }, api).ok, true)
   assert.deepEqual(sheets.get('Revenue Copy')._move, { before: 'Anchor', after: null })

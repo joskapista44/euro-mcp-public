@@ -7,7 +7,7 @@ function makeApi(){
   const rules=[]
   const fc={
     GetCount(){return rules.length},
-    GetItem(i){return rules[i]||null},
+    GetItem(i){return rules[i-1]||null},
     Add(type,operator,formula1,formula2){
       const r={type,operator,formula1,formula2,priority:rules.length+1,fill:null,
         GetType(){return this.type},GetOperator(){return this.operator},GetFormula1(){return this.formula1},GetFormula2(){return this.formula2},GetPriority(){return this.priority},

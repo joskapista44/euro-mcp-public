@@ -2,7 +2,7 @@
 
 Canonical EURO-MCP register for Excel Power User capabilities that are not currently machine-verifiable through the deployed EuroOffice / ONLYOFFICE public API.
 
-Last live recheck: 2026-09-12
+Last live recheck: 2026-09-17
 Deployed EuroOffice DocumentServer: 9.3.4.60
 
 ## Acceptance rule
@@ -87,3 +87,7 @@ DEFERRED means an operation is present or partly present but EURO-MCP cannot pro
 This file is part of the MCP documentation. Update it whenever the DocumentServer runtime changes, a capability probe discovers a new public operation/readback, a deferred capability becomes machine-verifiable, or a new Excel Power User gap is found.
 
 After all implementable Power User capabilities are closed or recorded here as runtime-deferred/unsupported, run a final cross-capability Excel Power User integrated acceptance. Documented runtime blockers should be reported separately rather than treated as implementation failures.
+
+## W0.12 migration closure
+
+The final real-MCP cross-capability gate passed on 2026-09-17. One `office_xlsx_batch` invocation applied and semantically verified 13 compatible Power User goals in one persistent editor session with one save barrier; the persisted retry reopened once and proved the same final state with 0 writes and no barrier. Runtime-deferred and unsupported entries above remain explicit exclusions, not failed acceptance items.

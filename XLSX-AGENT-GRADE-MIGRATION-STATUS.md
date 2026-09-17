@@ -103,16 +103,13 @@ The existing M6.1 implementation remains a valid primitive-level LIVE PASS, but 
 
 Migration proceeds one semantic family at a time. Sort, exact single-field `filter_range`, `clear_filter`, the durable M6.2 validation core and M6.3 defined names are now agent-grade TRUE LIVE accepted. The old direct-Playwright acceptances must not be used as agent-grade authority. M6.4 pivot create/delete and persisted retries have now passed the narrow acceptance below.
 
-## Power User capabilities not yet migrated into the agent task vocabulary
+## Migration closure and runtime-bound exclusions
 
-The repository already has LIVE implementations/acceptances for capabilities outside the current W0.12-style agent task vocabulary. They are not automatically agent-grade merely because their earlier Power User acceptance is green. Remaining migration candidates include:
+The implementable Excel Power User scope is migrated and TRUE LIVE accepted under the W0.12 execution model. Semantic pivot refresh is now part of the MCP vocabulary. No additional capability may be promoted without an exact public identity/readback contract.
 
-- M6.4 semantic pivot refresh under the existing narrow source-coordinate, field-count and sampled-`GetData` contract;
-- broader M6.4 pivot source/field identity and mutation contracts if new public identity getters become available.
+Broader M6.4 pivot source/field identity remains runtime-bound until new public identity getters become available. M7 protected-range ACL remains primitive-only and runtime-DEFERRED for W0.12 because the deployed public API has no proven protected-range address getter. Chart set/rename/delete, including measurable presentation, position and series state, are W0.12 TRUE LIVE accepted; chart copy is runtime-UNSUPPORTED.
 
-M7 protected-range ACL remains primitive-only and runtime-DEFERRED for W0.12 because the deployed public API has no proven protected-range address getter. Chart set/rename/delete, including measurable presentation, position and series state, are W0.12 TRUE LIVE accepted; chart copy is runtime-UNSUPPORTED rather than a migration candidate.
-
-Each candidate needs an explicit task intent contract, fresh identity/read semantics, semantic verifier, whole-task proof, persistence behavior and retry/no-op/conflict semantics before being marked agent-grade.
+Operation-bound retry-token families (AutoFit, range move/copy and structural insert/delete) remain accepted standalone tasks rather than natural-retry batch intents. Exposing them through MCP later requires an explicit retry-token round trip; silently replaying them is forbidden.
 
 ## Runtime-deferred / unsupported capabilities
 
@@ -125,12 +122,12 @@ These remain governed by `EXCEL-POWER-USER-CAPABILITY-GAPS.md` and must not be p
 - M7 protected-range SetRange and SetAnyoneType semantic readback: DEFERRED;
 - M7 protected-range delete: runtime UNSUPPORTED.
 
-## Next migration order
+## Closure and future recheck policy
 
-1. Keep M4.5 explicitly runtime-DEFERRED unless the deployed runtime changes; the current implementable M4 agent-grade scope is TRUE LIVE accepted.
-2. Verify the shared cross-capability batch executor, then integrate its supported vocabulary with the MCP surface. Keep M7 protected-range ACL primitive-only until exact protected-range address readback exists.
-3. Keep charts, pivots and protected-range ACL as explicit object-identity tasks with their own verifiers rather than reducing them to callback success.
-4. Finish with a cross-capability persistent-session acceptance and update the capability gap register without converting documented runtime blockers to implementation failures.
+1. Keep the current implementable scope closed as TRUE LIVE accepted.
+2. Recheck M4.5, broader pivot identity and M7 only when the deployed DocumentServer public API changes.
+3. Keep charts and pivots as explicit object-identity tasks with their own verifiers rather than reducing them to callback success.
+4. Preserve explicit retry-token semantics if destructive/relative operations are later exposed through MCP.
 
 ## Pivot runtime result and limits
 
@@ -166,13 +163,13 @@ The broad runtime gate passed nine goals in one MCP request: create, write, rena
 
 ### Wider MCP batch first runtime finding
 
-The first nine-goal run executed all nine mutations successfully but correctly failed closed before the persistence barrier during batch-wide final verification. Cause: the core verifier still expected the original `write_range` value in a cell intentionally overwritten later by `clear_range`. This was an orchestration final-state bug, not an ONLYOFFICE mutation failure. The batch planner now derives a separate read-only core verification projection in which downstream clear intersections are blank, while the apply phase still uses the original requested write. A static regression asserts the apply/verify values differ exactly at the overlaid cell (`4` then `null`). Retest is pending. Because the failed run had writes but no successful persistence barrier, it is not recorded as acceptance PASS.
+The first nine-goal run executed all nine mutations successfully but correctly failed closed before the persistence barrier during batch-wide final verification. Cause: the core verifier still expected the original `write_range` value in a cell intentionally overwritten later by `clear_range`. This was an orchestration final-state bug, not an ONLYOFFICE mutation failure. The batch planner now derives a separate read-only core verification projection in which downstream clear intersections are blank, while the apply phase still uses the original requested write. A static regression asserts the apply/verify values differ exactly at the overlaid cell (`4` then `null`). The later acceptance below closes this finding. Because the failed run had writes but no successful persistence barrier, it is not recorded as acceptance PASS.
 
 ### Wider MCP batch second runtime finding
 
 After the read-only projection fix, the first invocation passed all nine final checks, used one editor session, performed 9 writes and completed the save barrier. The persisted retry then failed closed with 0 writes because its apply-phase core classifier still compared against the overwritten intermediate value. This confirmed that projection only during final verification was insufficient.
 
-The final-state projection is now used for both dispatch planning and final verification. A core value later covered by `clear_range` is a dead intermediate write and is canonicalized to blank before dispatch. The expected first-run write count is therefore 8, not 9; retry remains 0. Static regression now requires `[null,null]` for apply and verify projections. The nine-goal runtime retry gate remains pending and the first invocation above is not treated as complete two-invocation acceptance.
+The final-state projection is now used for both dispatch planning and final verification. A core value later covered by `clear_range` is a dead intermediate write and is canonicalized to blank before dispatch. The expected first-run write count is therefore 8, not 9; retry remains 0. Static regression now requires `[null,null]` for apply and verify projections. The later nine-goal PASS closes the retry gate; the earlier incomplete invocation is not treated as acceptance evidence.
 
 ### Nine-goal MCP acceptance result
 
@@ -192,10 +189,14 @@ User-reported chart lifecycle result at `55dcd4c`: `XLSX CHART MCP LIVE ACCEPTAN
 
 User-reported result at `21ecbc8`: `XLSX PIVOT REFRESH MCP LIVE ACCEPTANCE: PASS`. Setup used one session and 3 writes. The refresh invocation changed one source value and refreshed the pivot in one session with exactly 2 writes and one successful save barrier; persisted retry reopened once, proved both source value and pivot totals already satisfied, used 0 writes and no barrier. Cleanup removed the generated pivot sheet with 1 write. Measured open/task times were 3086/1371 ms (setup), 2744/1220 ms (refresh), 2738/248 ms (retry) and 2681/1191 ms (cleanup).
 
-### Final Excel Power User MCP gate — prepared, TRUE LIVE pending
+### Final Excel Power User MCP gate — TRUE LIVE PASS
 
 The final gate composes 13 natural-retry-safe goals in one real `office_xlsx_batch` call: sheet move, range clear, formatting, fixed layout, merge, freeze, sort, filter, durable validation, defined name, conditional formatting, pivot creation and an advanced named chart. It then reopens the same final-state request and requires 0 writes and no save barrier. Operation-bound retry-token families remain deliberately separate; runtime-deferred/unsupported capabilities remain exclusions rather than false failures.
 
 The first final-gate run completed all 13 mutations but correctly failed closed before the save barrier during read-only whole-task verification. The failing goal was freeze panes: its immediate mutation readback had passed, but later pivot/chart object work changed the editor sheet/view context, so final freeze readback no longer matched and the read-only adapter blocked a rewrite. The batch planner now schedules freeze goals last for both apply and final verification while preserving their original operation indexes. A static regression covers this ordering rule; no delay or extra editor session was added.
 
-The reordered final gate passed its 13-goal apply and persisted 0-write retry. Its separate object cleanup then exposed another sheet-context dependency: deleting the pivot worksheet first changed the active sheet, while the chart fallback selected the named chart through its worksheet object but sent the editor Delete key to the wrong active context. The fallback now uses public `ApiWorksheet.SetActive`, verifies the active sheet name when readable, then performs public Select, Delete-key dispatch and bounded public inventory readback. The final gate itself was already successful; cleanup remains to be retested.
+The reordered final gate passed its 13-goal apply and persisted 0-write retry. Its separate object cleanup then exposed another sheet-context dependency: deleting the pivot worksheet first changed the active sheet, while the chart fallback selected the named chart through its worksheet object but sent the editor Delete key to the wrong active context. The fallback now uses public `ApiWorksheet.SetActive`, verifies the active sheet name when readable, then performs public Select, Delete-key dispatch and bounded public inventory readback.
+
+User-reported final result at `c2f56b5`: `XLSX FINAL POWER USER MCP LIVE ACCEPTANCE: PASS`. Fixture setup used one editor session, 4 writes and one save barrier. The 13-goal Power User request used one editor session, exactly 13 verified task-level writes, read-only whole-task verification and one successful save barrier. The persisted retry reopened the workbook once, proved every final state, used 0 writes and no barrier. Pivot-plus-chart cleanup used one editor session, 2 writes, read-only whole-task verification and one save barrier. Original operation indexes were preserved even though freeze was safely scheduled last. Measured open/task times were 3251/1631 ms (setup), 2859/2719 ms (apply), 3127/851 ms (retry) and 3205/1349 ms (cleanup).
+
+This closes the current Excel W0.12 MCP migration. Every supported combined task follows one editor session, fresh live reads around mutation, semantic readback, read-only whole-task verification, a single save barrier only when writes occurred, and close. No arbitrary delay or second editor session is used inside a task.
