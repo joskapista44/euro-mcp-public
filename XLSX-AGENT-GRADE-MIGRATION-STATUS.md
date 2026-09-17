@@ -107,7 +107,7 @@ Migration proceeds one semantic family at a time. Sort, exact single-field `filt
 
 The repository already has LIVE implementations/acceptances for capabilities outside the current W0.12-style agent task vocabulary. They are not automatically agent-grade merely because their earlier Power User acceptance is green. Remaining migration candidates include:
 
-- M5 chart families;
+- M5 chart rename and the runtime-unsupported chart copy operation; chart set/delete plus measurable presentation, position and series state are now in the W0.12 task vocabulary, with the advanced persisted gate pending;
 - broader M6.4 pivot source/field identity and mutation contracts;
 - M7 protected-range ACL core.
 
@@ -176,3 +176,7 @@ The final-state projection is now used for both dispatch planning and final veri
 ### Nine-goal MCP acceptance result
 
 User-reported result: `XLSX BATCH MCP LIVE ACCEPTANCE: PASS`. All batch-level checks preserve the original operation indexes 0–8. This closes the shared MCP orchestration gate for the currently exposed non-chart vocabulary. The remaining implementation work is chart agent-grade migration plus an explicit design for operation-bound retry-token families; documented runtime gaps remain exclusions, not failures.
+
+### Chart MCP core acceptance result
+
+User-reported result at `0d65732`: `XLSX CHART MCP LIVE ACCEPTANCE: PASS`. Named chart creation plus fixture setup ran in one editor session with 3 writes, read-only whole-task verification and one successful save barrier; persisted retry reopened the workbook, performed 0 writes and used no barrier. Named deletion ran in one session with 1 write and a successful barrier; its persisted retry used 0 writes and no barrier. The editor-key deletion fallback now uses bounded semantic readback polling rather than a fixed post-key delay. This proves the basic name/type/title/size/series-count contract. The next gate extends the same final-state task with public-getter-verified legend, axes, labels, style, position and series formulas/name.

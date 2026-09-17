@@ -100,7 +100,7 @@ function adapter(api,family,readOnly){
   const r=family.file==='format'
    ?await family.transport.runCommand(api.session,[spec.sheet,spec.range,spec.format,apply])
    :await family.transport.runCommand(api.session,spec,apply)
-  if(apply&&(family.file==='chart'?(r?.applied||r?.mutation?.ok):(r?.ok&&!r.noOp)))api.session.markWrite()
+  if(apply&&(family.file==='chart'?(r?.applied||r?.mutationAttempted):(r?.ok&&!r.noOp)))api.session.markWrite()
   return r
  }
  // Do not expose session or mutators to the family executors.

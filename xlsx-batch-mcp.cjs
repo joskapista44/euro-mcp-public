@@ -4,6 +4,9 @@ const batch=require('./xlsx-persistent-batch.cjs')
 const coedit=require('./coedit.cjs')
 const str=z.string().min(1)
 const scalar=z.union([z.string(),z.number(),z.boolean()])
+const chartPresentation=z.object({legendPosition:str.optional(),horizontalAxisTitle:str.optional(),verticalAxisTitle:str.optional(),dataLabels:z.object({showSeriesName:z.boolean(),showCategoryName:z.boolean(),showValue:z.boolean(),showPercent:z.boolean()}).strict().optional(),style:z.number().int().nonnegative().optional()}).strict()
+const chartPosition=z.object({fromCol:z.number(),colOffset:z.number(),fromRow:z.number(),rowOffset:z.number()}).strict()
+const chartSeries=z.object({index:z.number().int().nonnegative(),name:str.optional(),valuesRange:str.optional(),xValuesRange:str.optional(),categoryRange:str.optional()}).strict()
 // Strict outer operation fields prevent silently discarded options. Family
 // planners validate the semantic combinations before credentials or browser use.
 const operation=z.object({
@@ -20,9 +23,10 @@ const operation=z.object({
  name:str.optional(),newName:str.optional(),refersTo:str.optional(),rule:z.record(z.string(),z.unknown()).optional(),
  sourceSheet:str.optional(),sourceRange:str.optional(),rowField:str.optional(),columnField:str.optional(),dataField:str.optional(),styleName:str.optional(),pivotSheet:str.optional(),
  chartType:str.optional(),title:str.optional(),expectedSeriesCount:z.number().int().positive().optional(),inRows:z.boolean().optional(),
+ presentation:chartPresentation.optional(),chartPosition:chartPosition.optional(),series:z.array(chartSeries).min(1).optional(),
  assertions:z.array(z.object({items:z.array(scalar).min(1),expected:scalar}).strict()).optional()
 }).strict().superRefine((op,ctx)=>{
- const fields={create_sheet:['name'],write_range:['sheet','range','values','formulas'],copy_sheet:['sheet','name'],rename_sheet:['sheet','name'],delete_sheet:['sheet'],move_sheet:['sheet','referenceSheet','position'],clear_range:['sheet','range'],format_range:['sheet','range','format'],layout_range:['sheet','range','type','width','height','hidden'],merge_range:['sheet','range'],unmerge_range:['sheet','range'],freeze_panes:['sheet','mode','range','count'],unfreeze_panes:['sheet'],sort_range:['sheet','range','keyRange','order','hasHeaders'],filter_range:['sheet','range','field','criteria1','criteria2','operator'],clear_filter:['sheet','range'],set_validation:['sheet','range','validationType','alertStyle','operator','formula1','formula2'],clear_validation:['sheet','range'],set_defined_name:['name','refersTo'],rename_defined_name:['name','newName','refersTo'],delete_defined_name:['name'],add_conditional_format:['sheet','range','rule'],delete_conditional_format:['sheet','range','rule'],create_pivot:['name','sourceSheet','sourceRange','rowField','columnField','dataField','styleName','assertions'],delete_pivot_sheet:['name','pivotSheet'],set_chart:['sheet','name','range','chartType','title','width','height','expectedSeriesCount','inRows'],delete_chart:['sheet','name']}
+ const fields={create_sheet:['name'],write_range:['sheet','range','values','formulas'],copy_sheet:['sheet','name'],rename_sheet:['sheet','name'],delete_sheet:['sheet'],move_sheet:['sheet','referenceSheet','position'],clear_range:['sheet','range'],format_range:['sheet','range','format'],layout_range:['sheet','range','type','width','height','hidden'],merge_range:['sheet','range'],unmerge_range:['sheet','range'],freeze_panes:['sheet','mode','range','count'],unfreeze_panes:['sheet'],sort_range:['sheet','range','keyRange','order','hasHeaders'],filter_range:['sheet','range','field','criteria1','criteria2','operator'],clear_filter:['sheet','range'],set_validation:['sheet','range','validationType','alertStyle','operator','formula1','formula2'],clear_validation:['sheet','range'],set_defined_name:['name','refersTo'],rename_defined_name:['name','newName','refersTo'],delete_defined_name:['name'],add_conditional_format:['sheet','range','rule'],delete_conditional_format:['sheet','range','rule'],create_pivot:['name','sourceSheet','sourceRange','rowField','columnField','dataField','styleName','assertions'],delete_pivot_sheet:['name','pivotSheet'],set_chart:['sheet','name','range','chartType','title','width','height','expectedSeriesCount','inRows','presentation','chartPosition','series'],delete_chart:['sheet','name']}
  for(const key of Object.keys(op))if(key!=='intent'&&!fields[op.intent].includes(key))ctx.addIssue({code:'custom',path:[key],message:'Field not supported by this intent'})
 })
 const input={file_id:z.string().regex(/^[1-9][0-9]*$/),operations:z.array(operation).min(1).max(100)}
@@ -51,7 +55,7 @@ function makeHandler(deps={}){
 function register(server,deps){
  server.tool('office_xlsx_batch',
   'Execute final-state Excel operations in ONE persistent ONLYOFFICE editor session per call. '+
-  'Supports sheet create/copy/rename/delete, range writes, format, fixed layout, merge/unmerge, freeze, sort, filter, durable validation, workbook names, conditional formatting, tested pivot create/delete, and named chart set/delete. '+
+  'Supports sheet create/copy/rename/delete, range writes, format, fixed layout, merge/unmerge, freeze, sort, filter, durable validation, workbook names, conditional formatting, tested pivot create/delete, and named chart set/delete with measurable presentation, position and series state. '+
   'Read/edit/read, read-only whole-task verification, then one save barrier and close. '+
   'Submit all compatible goals together; only one goal per family per sheet/name. Not transactional. '+
   'Core sheet/write operations must precede enhanced operations. No AutoFit. '+

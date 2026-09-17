@@ -2,6 +2,39 @@
 const persistent=require('./xlsx-persistent-session.cjs')
 const agent=require('./xlsx-agent-chart-task.cjs')
 const {runChartInFrame}=require('./live-charts.cjs')
+const {runChartPresentationInFrame}=require('./live-chart-presentation.cjs')
+const {runChartDataObjectInFrame}=require('./live-chart-data-objects.cjs')
+function chartSemanticStateCommand(spec){
+ function has(o,n){return !!o&&typeof o[n]==='function'}
+ function safe(o,n){try{return has(o,n)?o[n]():null}catch(_){return null}}
+ function trim(v){return typeof v==='string'?v.replace(/[\r\n]+$/g,''):v}
+ function formula(v){return typeof v==='string'&&v.charAt(0)==='='?v.slice(1):v}
+ function seriesName(v){if(typeof v!=='string')return v;if(v.slice(0,2)==='="'&&v.slice(-1)==='"')return v.slice(2,-1).replace(/""/g,'"');return v}
+ try{
+  var sh=has(Api,'GetSheet')?Api.GetSheet(spec.sheet):null;if(!sh||!has(sh,'GetAllCharts'))return {ok:false,outcome:'chart-state-unverifiable',source:'live-coedit-editor'}
+  var charts=sh.GetAllCharts()||[],matches=[];for(var i=0;i<charts.length;i++)if(String(safe(charts[i],'GetName'))===String(spec.name))matches.push(charts[i])
+  if(matches.length!==1)return {ok:true,outcome:'chart-state-read',source:'live-coedit-editor',state:{measurable:true,present:matches.length>0,count:matches.length,name:spec.name}}
+  var c=matches[0],all=has(c,'GetAllSeries')?(c.GetAllSeries()||[]):null,unknown=[]
+  var state={measurable:true,present:true,count:1,name:safe(c,'GetName'),chartType:safe(c,'GetChartType'),title:trim(safe(c,'GetTitle')),width:safe(c,'GetWidth'),height:safe(c,'GetHeight'),seriesCount:all?all.length:null}
+  var coreRequired=spec.intent==='set_chart'?['name','chartType','title','width','height','seriesCount']:['name'];for(var j=0;j<coreRequired.length;j++){var core=coreRequired[j];if(state[core]==null)unknown.push(core)}
+  var p=spec.presentation
+  if(p){
+   if(p.legendPosition!=null){state.legendPosition=safe(c,'GetLegendPos');if(state.legendPosition==null)unknown.push('legendPosition')}
+   if(p.horizontalAxisTitle!=null){state.horizontalAxisTitle=trim(safe(c,'GetHorAxisTitle'));if(state.horizontalAxisTitle==null)unknown.push('horizontalAxisTitle')}
+   if(p.verticalAxisTitle!=null){state.verticalAxisTitle=trim(safe(c,'GetVerAxisTitle'));if(state.verticalAxisTitle==null)unknown.push('verticalAxisTitle')}
+   if(p.dataLabels!=null){state.dataLabels=safe(c,'GetDataLabels');if(state.dataLabels==null)unknown.push('dataLabels')}
+   if(p.style!=null){state.style=safe(c,'GetChartStyle');if(state.style==null)unknown.push('style')}
+  }
+  if(spec.chartPosition){state.position=safe(c,'GetPosition');if(state.position==null)unknown.push('position')}
+  if(spec.series){state.series=[];for(var k=0;k<spec.series.length;k++){var wanted=spec.series[k],s=all&&all[wanted.index],actual={index:wanted.index};if(!s){unknown.push('series['+wanted.index+']');state.series.push(actual);continue}if(wanted.name!=null){actual.name=seriesName(safe(s,'GetName'));if(actual.name==null)unknown.push('seriesName['+wanted.index+']')}if(wanted.valuesRange!=null){actual.valuesRange=formula(safe(s,'GetValues'));if(actual.valuesRange==null)unknown.push('seriesValues['+wanted.index+']')}if(wanted.xValuesRange!=null){actual.xValuesRange=formula(safe(s,'GetXValues'));if(actual.xValuesRange==null)unknown.push('seriesXValues['+wanted.index+']')}if(wanted.categoryRange!=null){actual.categoryRange=formula(safe(s,'GetCatFormula'));if(actual.categoryRange==null)unknown.push('categoryFormula['+wanted.index+']')}state.series.push(actual)}}
+  if(unknown.length){state.measurable=false;state.unknown=unknown;return {ok:false,outcome:'chart-state-unverifiable',source:'live-coedit-editor',state:state}}
+  return {ok:true,outcome:'chart-state-read',source:'live-coedit-editor',state:state}
+ }catch(e){return {ok:false,outcome:'chart-state-error',source:'live-coedit-editor',error:String(e&&e.message||e)} }
+}
+async function semanticState(session,op){
+ const body=`return (${chartSemanticStateCommand.toString()})(${JSON.stringify(op)});`
+ return session.frame.evaluate(({where,body})=>new Promise(resolve=>{const e=where==='window.editor'?window.editor:(window.Asc||{}).editor;let done=false;const finish=v=>{if(!done){done=true;resolve(v)}};const timer=setTimeout(()=>finish({ok:false,outcome:'callback-timeout',source:'live-coedit-editor'}),8000);try{e.callCommand(new Function(body),false,v=>{clearTimeout(timer);finish(v===undefined?{ok:false,outcome:'empty-callback',source:'live-coedit-editor'}:v)})}catch(err){clearTimeout(timer);finish({ok:false,outcome:'callcommand-error',source:'live-coedit-editor',error:String(err&&err.message||err)})}}),{where:session.apiWhere,body})
+}
 function stateOf(observed,op){
  const matches=(observed?.charts||[]).filter(c=>String(c?.name)===op.name)
  if(matches.length!==1)return {measurable:true,present:matches.length>0,count:matches.length,name:op.name}
@@ -10,34 +43,53 @@ function stateOf(observed,op){
 }
 function match(state,op){
  if(op.intent==='delete_chart')return state.measurable&&state.present===false&&state.count===0
- return state.measurable&&state.present&&state.count===1&&String(state.chartType)===op.chartType&&state.title===op.title&&Number(state.width)===op.width&&Number(state.height)===op.height&&Number(state.seriesCount)===op.expectedSeriesCount
+ if(!(state.measurable&&state.present&&state.count===1&&String(state.chartType)===op.chartType&&state.title===op.title&&Number(state.width)===op.width&&Number(state.height)===op.height&&Number(state.seriesCount)===op.expectedSeriesCount))return false
+ const p=op.presentation||{}
+ if(p.legendPosition!=null&&String(state.legendPosition)!==p.legendPosition)return false
+ if(p.horizontalAxisTitle!=null&&state.horizontalAxisTitle!==p.horizontalAxisTitle)return false
+ if(p.verticalAxisTitle!=null&&state.verticalAxisTitle!==p.verticalAxisTitle)return false
+ if(p.dataLabels!=null){const expected={showSerName:p.dataLabels.showSeriesName,showCatName:p.dataLabels.showCategoryName,showVal:p.dataLabels.showValue,showPercent:p.dataLabels.showPercent};if(!state.dataLabels||Object.keys(expected).some(k=>state.dataLabels[k]!==expected[k]))return false}
+ if(p.style!=null&&Number(state.style)!==p.style)return false
+ if(op.chartPosition&&(!state.position||['fromCol','colOffset','fromRow','rowOffset'].some(k=>Number(state.position[k])!==Number(op.chartPosition[k]))))return false
+ if(op.series&&op.series.some(w=>{const a=(state.series||[]).find(x=>x.index===w.index);return !a||Object.keys(w).some(k=>a[k]!==w[k])}))return false
+ return true
 }
 async function chartObserved(session,op,apply){
- const inspect=()=>runChartInFrame(session.frame,session.apiWhere,{type:'chart.inspect',sheet:op.sheet},8000)
+ const inspect=()=>semanticState(session,op)
  const beforeRead=await inspect()
- if(!beforeRead?.ok||beforeRead?.verification?.status!=='PASS')return {ok:false,outcome:'chart-state-unverifiable',source:'live-coedit-editor',readback:beforeRead}
- const before=stateOf(beforeRead,op),satisfied=match(before,op)
+ if(!beforeRead?.ok)return {ok:false,outcome:'chart-state-unverifiable',source:'live-coedit-editor',readback:beforeRead}
+ const before=beforeRead.state,satisfied=match(before,op)
  if(!apply)return {ok:true,outcome:satisfied?'chart-already-satisfied':'chart-observed',source:'live-coedit-editor',noOp:satisfied,state:before,verification:{measurable:true,match:satisfied}}
  if(satisfied)return {ok:true,outcome:'chart-already-satisfied',source:'live-coedit-editor',noOp:true,state:before,verification:{measurable:true,match:true}}
- let command
+ let command,mutated=false,mutations=[]
  if(op.intent==='delete_chart'){
   if(before.count!==1)return {ok:false,outcome:'chart-delete-identity-conflict',source:'live-coedit-editor',state:before,verification:{measurable:true,match:false}}
   command={type:'chart.delete',sheet:op.sheet,name:op.name}
  }else if(before.count===0){
   command={type:'chart.create',sheet:op.sheet,range:op.range,chartType:op.chartType,name:op.name,title:op.title,width:op.width,height:op.height,inRows:op.inRows}
  }else if(before.count===1&&String(before.chartType)===op.chartType&&Number(before.seriesCount)===op.expectedSeriesCount){
-  command={type:'chart.modify',sheet:op.sheet,name:op.name,title:op.title,width:op.width,height:op.height}
+  command=before.title!==op.title||Number(before.width)!==op.width||Number(before.height)!==op.height?{type:'chart.modify',sheet:op.sheet,name:op.name,title:op.title,width:op.width,height:op.height}:null
  }else return {ok:false,outcome:'chart-set-identity-conflict',source:'live-coedit-editor',state:before,verification:{measurable:true,match:false}}
- const changed=await runChartInFrame(session.frame,session.apiWhere,command,8000)
- if(!changed?.ok||changed?.verification?.status!=='PASS')return {ok:false,outcome:'chart-mutation-unverified',source:'live-coedit-editor',state:before,mutation:changed,verification:{measurable:true,match:false}}
+ let changed=null
+ if(command){changed=await runChartInFrame(session.frame,session.apiWhere,command,8000);mutations.push(changed);if(changed?.ok&&changed?.verification?.status==='PASS')mutated=true;if(!changed?.ok||changed?.verification?.status!=='PASS')return {ok:false,outcome:'chart-mutation-unverified',source:'live-coedit-editor',state:before,mutation:changed,mutationAttempted:mutated,verification:{measurable:true,match:false}}}
+ if(op.intent==='set_chart'){
+  const p=op.presentation||{},calls=[]
+  if(p.legendPosition!=null&&before.legendPosition!==p.legendPosition)calls.push([runChartPresentationInFrame,{type:'chart.presentation.legend',sheet:op.sheet,name:op.name,position:p.legendPosition}])
+  if((p.horizontalAxisTitle!=null&&before.horizontalAxisTitle!==p.horizontalAxisTitle)||(p.verticalAxisTitle!=null&&before.verticalAxisTitle!==p.verticalAxisTitle))calls.push([runChartPresentationInFrame,{type:'chart.presentation.axisTitles',sheet:op.sheet,name:op.name,horizontal:p.horizontalAxisTitle,vertical:p.verticalAxisTitle}])
+  if(p.dataLabels!=null){const expected={showSerName:p.dataLabels.showSeriesName,showCatName:p.dataLabels.showCategoryName,showVal:p.dataLabels.showValue,showPercent:p.dataLabels.showPercent};if(!before.dataLabels||Object.keys(expected).some(k=>before.dataLabels[k]!==expected[k]))calls.push([runChartPresentationInFrame,{type:'chart.presentation.dataLabels',sheet:op.sheet,name:op.name,...p.dataLabels}])}
+  if(p.style!=null&&Number(before.style)!==p.style)calls.push([runChartPresentationInFrame,{type:'chart.presentation.style',sheet:op.sheet,name:op.name,style:p.style}])
+  if(op.chartPosition&&(!before.position||['fromCol','colOffset','fromRow','rowOffset'].some(k=>Number(before.position[k])!==Number(op.chartPosition[k]))))calls.push([runChartDataObjectInFrame,{type:'chart.object.position',sheet:op.sheet,name:op.name,...op.chartPosition}])
+  for(const wanted of op.series||[]){const old=(before.series||[]).find(s=>s.index===wanted.index)||{};if(wanted.name!=null&&old.name!==wanted.name)calls.push([runChartDataObjectInFrame,{type:'chart.data.seriesName',sheet:op.sheet,name:op.name,seriesIndex:wanted.index,value:wanted.name}]);if(wanted.valuesRange!=null&&old.valuesRange!==wanted.valuesRange)calls.push([runChartDataObjectInFrame,{type:'chart.data.seriesValues',sheet:op.sheet,name:op.name,seriesIndex:wanted.index,range:wanted.valuesRange}]);if(wanted.xValuesRange!=null&&old.xValuesRange!==wanted.xValuesRange)calls.push([runChartDataObjectInFrame,{type:'chart.data.seriesXValues',sheet:op.sheet,name:op.name,seriesIndex:wanted.index,range:wanted.xValuesRange}]);if(wanted.categoryRange!=null&&old.categoryRange!==wanted.categoryRange)calls.push([runChartDataObjectInFrame,{type:'chart.data.categoryFormula',sheet:op.sheet,name:op.name,seriesIndex:wanted.index,range:wanted.categoryRange}])}
+  for(const [fn,spec] of calls){const r=await fn(session.frame,session.apiWhere,spec,8000);mutations.push(r);if(r?.ok&&r?.verification?.status==='PASS')mutated=true;else return {ok:false,outcome:'chart-mutation-unverified',source:'live-coedit-editor',state:before,mutation:r,mutations,mutationAttempted:mutated,verification:{measurable:true,match:false}}}
+ }
  const afterRead=await inspect()
- if(!afterRead?.ok||afterRead?.verification?.status!=='PASS')return {ok:false,outcome:'chart-post-state-unverifiable',source:'live-coedit-editor',mutation:changed,readback:afterRead}
- const after=stateOf(afterRead,op),pass=match(after,op)
- return {ok:pass,outcome:pass?'chart-live-verified':'chart-semantic-mismatch',source:'live-coedit-editor',noOp:false,applied:true,before,state:after,mutation:changed,verification:{measurable:true,match:pass}}
+ if(!afterRead?.ok)return {ok:false,outcome:'chart-post-state-unverifiable',source:'live-coedit-editor',mutation:changed,mutations,mutationAttempted:mutated,readback:afterRead}
+ const after=afterRead.state,pass=match(after,op)
+ return {ok:pass,outcome:pass?'chart-live-verified':'chart-semantic-mismatch',source:'live-coedit-editor',noOp:false,applied:mutated,before,state:after,mutation:changed,mutations,mutationAttempted:mutated,verification:{measurable:true,match:pass}}
 }
 async function executeChartTaskInPersistentSession(options={}){
  if(!options.url||!options.user||!options.pass)return {ok:false,outcome:'xlsx-persistent-credentials-required',authority:'PLAN_ONLY',writeAllowed:false}
- return persistent.withPersistentXlsxSession(options,api=>agent.executeChartTask({task:options.task,api:{...api,chartObserved:async(op,apply)=>{const r=await chartObserved(api.session,op,apply);if(apply&&(r?.applied||r?.mutation?.ok))api.session.markWrite();return r}}}))
+ return persistent.withPersistentXlsxSession(options,api=>agent.executeChartTask({task:options.task,api:{...api,chartObserved:async(op,apply)=>{const r=await chartObserved(api.session,op,apply);if(apply&&(r?.applied||r?.mutationAttempted))api.session.markWrite();return r}}}))
 }
 const runCommand=chartObserved
-module.exports={stateOf,match,chartObserved,runCommand,executeChartTaskInPersistentSession}
+module.exports={chartSemanticStateCommand,semanticState,stateOf,match,chartObserved,runCommand,executeChartTaskInPersistentSession}
