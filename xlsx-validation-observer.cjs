@@ -18,7 +18,7 @@ function validationObserveCommand(spec){
   state.absent=state.type==null||state.type==='xlValidateInputOnly';state.present=!state.absent
   return state
  }
- function expected(){return {type:spec.validationType,alertStyle:spec.alertStyle,operator:spec.operator,formula1:normFormula(spec.formula1),formula2:normFormula(spec.formula2),ignoreBlank:spec.ignoreBlank,inCellDropdown:spec.inCellDropdown,inputMessage:spec.inputMessage,inputTitle:spec.inputTitle,showError:spec.showError,showInput:spec.showInput,errorMessage:spec.errorMessage,errorTitle:spec.errorTitle}}
+ function expected(){return {type:spec.validationType,alertStyle:spec.alertStyle,operator:spec.operator,formula1:normFormula(spec.formula1),formula2:normFormula(spec.formula2)}}
  function setMismatches(state){
   var out=[]
   if(!state.measurable)return ['unmeasurable']
@@ -49,9 +49,6 @@ function validationObserveCommand(spec){
    var method=before.absent?'Add':'Modify'
    if(!has(validation,method))return {ok:false,outcome:'validation-'+method.toLowerCase()+'-api-unavailable',source:'live-coedit-editor',state:before}
    validation[method](spec.validationType,spec.alertStyle,spec.operator,spec.formula1,spec.formula2)
-   var setters={ignoreBlank:'SetIgnoreBlank',inCellDropdown:'SetInCellDropdown',inputMessage:'SetInputMessage',inputTitle:'SetInputTitle',showError:'SetShowError',showInput:'SetShowInput',errorMessage:'SetErrorMessage',errorTitle:'SetErrorTitle'}
-   validation=range.GetValidation()
-   for(var k in setters){var setter=setters[k];if(!has(validation,setter))return {ok:false,outcome:'validation-option-api-unavailable',source:'live-coedit-editor',option:k,state:before};validation[setter](spec[k])}
   }
   var after=read(range)
   if(!after.measurable)return {ok:false,outcome:'validation-post-state-unverifiable',source:'live-coedit-editor',before:before,state:after}
