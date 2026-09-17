@@ -40,6 +40,8 @@ server.tool(
   },
 )
 
+require('./xlsx-batch-mcp.cjs').register(server)
+
 if (require.main === module) {
   const transport = new StdioServerTransport()
   server.connect(transport)
