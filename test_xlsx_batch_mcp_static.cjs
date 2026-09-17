@@ -3,7 +3,7 @@ const assert=require('assert/strict')
 const {McpServer}=require('@modelcontextprotocol/sdk/server/mcp.js')
 const {Client}=require('@modelcontextprotocol/sdk/client/index.js')
 const {InMemoryTransport}=require('@modelcontextprotocol/sdk/inMemory.js')
-const {register}=require('./xlsx-batch-mcp.cjs')
+const {register,schema}=require('./xlsx-batch-mcp.cjs')
 ;(async()=>{
  let credentials=0,calls=0,mode='ok'
  const auth={detectCallerId:()=>({ok:mode!=='caller',id:'agent'}),credentialsFor:async()=>{credentials++;return {ok:mode!=='credentials',url:'https://example.invalid',user:'agent',pass:'secret-test'}}}
@@ -15,6 +15,7 @@ const {register}=require('./xlsx-batch-mcp.cjs')
  const call=args=>client.callTool({name:'office_xlsx_batch',arguments:args})
  try{
   assert((await client.listTools()).tools.some(t=>t.name==='office_xlsx_batch'))
+  assert.equal(schema.safeParse({file_id:'123',operations:[{intent:'rename_chart',sheet:'S',name:'Old',newName:'New',chartType:'bar',title:'T',width:10,height:20,expectedSeriesCount:1}]}).success,true)
   assert.equal((await call({...request,operations:[{intent:'unknown'}]})).isError,true)
   assert.equal((await call({...request,operations:[{intent:'sort_range',sheet:'S',range:'A1:B3',keyRange:'C1:C3'}]})).isError,true)
   assert.equal(credentials,0);assert.equal(calls,0)

@@ -41,8 +41,7 @@ function stateOf(observed,op){
  const c=matches[0]
  return {measurable:true,present:true,count:1,name:c.name,chartType:c.chartType,title:c.title==null?null:String(c.title).replace(/[\r\n]+$/g,''),width:c.width,height:c.height,seriesCount:c.seriesCount}
 }
-function match(state,op){
- if(op.intent==='delete_chart')return state.measurable&&state.present===false&&state.count===0
+function chartStateMatches(state,op){
  if(!(state.measurable&&state.present&&state.count===1&&String(state.chartType)===op.chartType&&state.title===op.title&&Number(state.width)===op.width&&Number(state.height)===op.height&&Number(state.seriesCount)===op.expectedSeriesCount))return false
  const p=op.presentation||{}
  if(p.legendPosition!=null&&String(state.legendPosition)!==p.legendPosition)return false
@@ -53,6 +52,17 @@ function match(state,op){
  if(op.chartPosition&&(!state.position||['fromCol','colOffset','fromRow','rowOffset'].some(k=>Number(state.position[k])!==Number(op.chartPosition[k]))))return false
  if(op.series&&op.series.some(w=>{const a=(state.series||[]).find(x=>x.index===w.index);return !a||Object.keys(w).some(k=>a[k]!==w[k])}))return false
  return true
+}
+function match(state,op){
+ if(op.intent==='delete_chart')return state.measurable&&state.present===false&&state.count===0
+ if(op.intent==='rename_chart')return state.source?.measurable&&state.source.present===false&&state.source.count===0&&chartStateMatches(state.target,op)
+ return chartStateMatches(state,op)
+}
+async function operationState(session,op){
+ if(op.intent!=='rename_chart')return semanticState(session,op)
+ const source=await semanticState(session,{...op,intent:'set_chart',name:op.name}),target=await semanticState(session,{...op,intent:'set_chart',name:op.newName})
+ if(!source?.ok||!target?.ok)return {ok:false,outcome:'chart-rename-state-unverifiable',source:'live-coedit-editor',sourceRead:source,targetRead:target}
+ return {ok:true,outcome:'chart-rename-state-read',source:'live-coedit-editor',state:{measurable:true,source:source.state,target:target.state}}
 }
 function advancedMutationSpecs(before,op){
  const p=op.presentation||{},calls=[]
@@ -67,7 +77,7 @@ function advancedMutationSpecs(before,op){
  return calls
 }
 async function chartObserved(session,op,apply){
- const inspect=()=>semanticState(session,op)
+ const inspect=()=>operationState(session,op)
  const beforeRead=await inspect()
  if(!beforeRead?.ok)return {ok:false,outcome:'chart-state-unverifiable',source:'live-coedit-editor',readback:beforeRead}
  const before=beforeRead.state,satisfied=match(before,op)
@@ -77,13 +87,16 @@ async function chartObserved(session,op,apply){
  if(op.intent==='delete_chart'){
   if(before.count!==1)return {ok:false,outcome:'chart-delete-identity-conflict',source:'live-coedit-editor',state:before,verification:{measurable:true,match:false}}
   command={type:'chart.delete',sheet:op.sheet,name:op.name}
+ }else if(op.intent==='rename_chart'){
+  if(before.source?.count!==1||before.target?.count!==0||!chartStateMatches(before.source,op))return {ok:false,outcome:'chart-rename-identity-conflict',source:'live-coedit-editor',state:before,verification:{measurable:true,match:false}}
+  command={type:'chart.object.rename',sheet:op.sheet,name:op.name,newName:op.newName}
  }else if(before.count===0){
   command={type:'chart.create',sheet:op.sheet,range:op.range,chartType:op.chartType,name:op.name,title:op.title,width:op.width,height:op.height,inRows:op.inRows}
  }else if(before.count===1&&String(before.chartType)===op.chartType&&Number(before.seriesCount)===op.expectedSeriesCount){
   command=before.title!==op.title||Number(before.width)!==op.width||Number(before.height)!==op.height?{type:'chart.modify',sheet:op.sheet,name:op.name,title:op.title,width:op.width,height:op.height}:null
  }else return {ok:false,outcome:'chart-set-identity-conflict',source:'live-coedit-editor',state:before,verification:{measurable:true,match:false}}
  let changed=null
- if(command){changed=await runChartInFrame(session.frame,session.apiWhere,command,8000);mutations.push(changed);if(changed?.ok&&changed?.verification?.status==='PASS')mutated=true;if(!changed?.ok||changed?.verification?.status!=='PASS')return {ok:false,outcome:'chart-mutation-unverified',source:'live-coedit-editor',state:before,mutation:changed,mutationAttempted:mutated,verification:{measurable:true,match:false}}}
+ if(command){const runner=op.intent==='rename_chart'?runChartDataObjectInFrame:runChartInFrame;changed=await runner(session.frame,session.apiWhere,command,8000);mutations.push(changed);if(changed?.ok&&changed?.verification?.status==='PASS')mutated=true;if(!changed?.ok||changed?.verification?.status!=='PASS')return {ok:false,outcome:'chart-mutation-unverified',source:'live-coedit-editor',state:before,mutation:changed,mutationAttempted:mutated,verification:{measurable:true,match:false}}}
  if(op.intent==='set_chart'){
   for(const call of advancedMutationSpecs(before,op)){const fn=call.runner==='presentation'?runChartPresentationInFrame:runChartDataObjectInFrame,r=await fn(session.frame,session.apiWhere,call.spec,8000);mutations.push(r);if(r?.ok&&r?.verification?.status==='PASS')mutated=true;else return {ok:false,outcome:'chart-mutation-unverified',source:'live-coedit-editor',state:before,mutation:r,mutations,mutationAttempted:mutated,verification:{measurable:true,match:false}}}
  }
@@ -97,4 +110,4 @@ async function executeChartTaskInPersistentSession(options={}){
  return persistent.withPersistentXlsxSession(options,api=>agent.executeChartTask({task:options.task,api:{...api,chartObserved:async(op,apply)=>{const r=await chartObserved(api.session,op,apply);if(apply&&(r?.applied||r?.mutationAttempted))api.session.markWrite();return r}}}))
 }
 const runCommand=chartObserved
-module.exports={chartSemanticStateCommand,semanticState,stateOf,match,advancedMutationSpecs,chartObserved,runCommand,executeChartTaskInPersistentSession}
+module.exports={chartSemanticStateCommand,semanticState,stateOf,chartStateMatches,match,operationState,advancedMutationSpecs,chartObserved,runCommand,executeChartTaskInPersistentSession}

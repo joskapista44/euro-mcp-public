@@ -12,7 +12,7 @@ const definitions=[
  ['defined-name',['set_defined_name','rename_defined_name','delete_defined_name'],'DefinedName','definedNameObserved'],
  ['conditional-format',['add_conditional_format','delete_conditional_format'],'ConditionalFormat','cfObserved'],
  ['pivot',['create_pivot','delete_pivot_sheet'],'Pivot','pivotObserved'],
- ['chart',['set_chart','delete_chart'],'Chart','chartObserved']
+ ['chart',['set_chart','rename_chart','delete_chart'],'Chart','chartObserved']
 ]
 const core={
  file:'core',
