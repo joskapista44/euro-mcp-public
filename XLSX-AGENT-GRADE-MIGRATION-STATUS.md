@@ -166,3 +166,9 @@ The next and intended final broad runtime gate combines nine goals in one MCP re
 ### Wider MCP batch first runtime finding
 
 The first nine-goal run executed all nine mutations successfully but correctly failed closed before the persistence barrier during batch-wide final verification. Cause: the core verifier still expected the original `write_range` value in a cell intentionally overwritten later by `clear_range`. This was an orchestration final-state bug, not an ONLYOFFICE mutation failure. The batch planner now derives a separate read-only core verification projection in which downstream clear intersections are blank, while the apply phase still uses the original requested write. A static regression asserts the apply/verify values differ exactly at the overlaid cell (`4` then `null`). Retest is pending. Because the failed run had writes but no successful persistence barrier, it is not recorded as acceptance PASS.
+
+### Wider MCP batch second runtime finding
+
+After the read-only projection fix, the first invocation passed all nine final checks, used one editor session, performed 9 writes and completed the save barrier. The persisted retry then failed closed with 0 writes because its apply-phase core classifier still compared against the overwritten intermediate value. This confirmed that projection only during final verification was insufficient.
+
+The final-state projection is now used for both dispatch planning and final verification. A core value later covered by `clear_range` is a dead intermediate write and is canonicalized to blank before dispatch. The expected first-run write count is therefore 8, not 9; retry remains 0. Static regression now requires `[null,null]` for apply and verify projections. The nine-goal runtime retry gate remains pending and the first invocation above is not treated as complete two-invocation acceptance.
