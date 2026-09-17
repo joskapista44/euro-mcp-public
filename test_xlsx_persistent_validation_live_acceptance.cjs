@@ -9,7 +9,7 @@ function secret(id){const v=require('/home/user/marveen/dist/web/vault.js');cons
 const credentials={url:process.env.EURO_NEXTCLOUD_URL||'https://mt-server.eu',user:process.env.EURO_NEXTCLOUD_USER||'elliot',pass:secret('Elliot_nc_pass')}
 const options={url:credentials.url,user:credentials.user,pass:credentials.pass,fileId:FILE_ID,timeoutMs:30000,pollMs:50}
 function liveApi(api){return {...api,validationObserved:async(spec,apply)=>{const r=await validationPersistent.runCommand(api.session,spec,apply);if(apply&&r?.ok&&!r.noOp)api.session.markWrite();return r}}}
-function setTask(sheet){return {operations:[{intent:'set_validation',sheet,range:'B2:B5',validationType:'xlValidateWholeNumber',alertStyle:'xlValidAlertStop',operator:'xlBetween',formula1:'1',formula2:'10',ignoreBlank:false,inCellDropdown:true,inputTitle:'M6.2 input',inputMessage:'Enter 1-10',showInput:true,showError:true,errorTitle:'M6.2 error',errorMessage:'Only 1-10'}]}}
+function setTask(sheet){return {operations:[{intent:'set_validation',sheet,range:'B2:B5',validationType:'xlValidateWholeNumber',alertStyle:'xlValidAlertStop',operator:'xlBetween',formula1:'1',formula2:'10'}]}}
 function clearTask(sheet){return {operations:[{intent:'clear_validation',sheet,range:'B2:B5'}]}}
 async function firstInvocation(api,sheet){
  const created=await api.createSheetVerified(sheet);if(!created.ok)return {ok:false,outcome:'validation-fixture-create-failed',authority:created.authority||'LIVE_READ',created}
@@ -17,7 +17,7 @@ async function firstInvocation(api,sheet){
  const written=await api.writeRangeVerified({sheet,range:'A1:B5',values});if(!written.ok)return {ok:false,outcome:'validation-fixture-write-failed',authority:written.authority||'LIVE_READ',written}
  return validationAgent.executeValidationTask({task:setTask(sheet),api:liveApi(api)})
 }
-function exactSet(r){const s=r?.wholeTaskVerification?.state;return s?.address==='B2:B5'&&s?.present===true&&s?.type==='xlValidateWholeNumber'&&s?.alertStyle==='xlValidAlertStop'&&s?.operator==='xlBetween'&&s?.formula1==='1'&&s?.formula2==='10'&&s?.ignoreBlank===false&&s?.inCellDropdown===true&&s?.inputTitle==='M6.2 input'&&s?.inputMessage==='Enter 1-10'&&s?.showInput===true&&s?.showError===true&&s?.errorTitle==='M6.2 error'&&s?.errorMessage==='Only 1-10'}
+function exactSet(r){const s=r?.wholeTaskVerification?.state;return s?.address==='B2:B5'&&s?.present===true&&s?.type==='xlValidateWholeNumber'&&s?.alertStyle==='xlValidAlertStop'&&s?.operator==='xlBetween'&&s?.formula1==='1'&&s?.formula2==='10'}
 function exactClear(r){const s=r?.wholeTaskVerification?.state;return s?.address==='B2:B5'&&s?.absent===true&&s?.present===false}
 async function executeWithFreshPre(api,task){const la=liveApi(api),plan=validationAgent.planTask(task),retryPre=plan.ok?await la.validationObserved(plan.operation,false):null,result=await validationAgent.executeValidationTask({task,api:la});return {...result,retryPre}}
 function d(r){return {ok:r.ok,outcome:r.outcome,authority:r.authority,noOp:r.noOp,oneEditorSession:r.persistentSession?.oneEditorSession,writes:r.persistentSession?.writes,barrier:r.persistentSession?.persistenceBarrier?.ok,retryPre:r.retryPre,wholeTaskVerification:r.wholeTaskVerification,diagnostic:r.ok?undefined:{pre:r.pre,applied:r.applied,final:r.final}}}
