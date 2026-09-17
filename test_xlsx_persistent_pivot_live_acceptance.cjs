@@ -21,7 +21,7 @@ function exactCreate(r,name){const s=r?.wholeTaskVerification?.state;return s?.p
 function exactDelete(r,name){const s=r?.wholeTaskVerification?.state;return s?.pivot?.present===false&&s?.pivot?.name===name&&s?.pivotSheetPresent===false}
 function d(r){return {ok:r.ok,outcome:r.outcome,authority:r.authority,noOp:r.noOp,oneEditorSession:r.persistentSession?.oneEditorSession,writes:r.persistentSession?.writes,barrier:r.persistentSession?.persistenceBarrier?.ok,wholeTaskVerification:r.wholeTaskVerification,diagnostic:r.ok?undefined:{pre:r.pre,applied:r.applied,final:r.final}}}
 ;(async()=>{
- const suffix=String(Date.now()).slice(-7),sheet=`EURO PIV ${suffix}`,name=`EURO_P_${suffix}`
+ const suffix=String(Date.now()).slice(-7),sheet=`EURO_PIV_${suffix}`,name=`EURO_P_${suffix}`
  const first=await persistent.withPersistentXlsxSession(options,api=>firstInvocation(api,sheet,name));console.log('PIVOT CREATE TASK',JSON.stringify(d(first),null,2))
  assert.equal(first.ok,true);assert.equal(first.authority,'LIVE_VERIFY');assert.equal(first.noOp,false);assert.equal(exactCreate(first,name),true);assert.equal(first.persistentSession?.oneEditorSession,true);assert.equal(first.persistentSession?.writes,3);assert.equal(first.persistentSession?.persistenceBarrier?.ok,true)
  const pivotSheet=first.wholeTaskVerification.state.parentSheet;assert.equal(typeof pivotSheet,'string')
