@@ -43,6 +43,7 @@ The following paths have direct runtime acceptance on the persistent-session bra
 - M4.3 row/column layout: column width, row height, hide/show columns and rows, each with same-session semantic readback, persistence barrier and persisted no-op retry;
 - M4.3 AutoFit columns and rows using the measured direct-range `AutoFit(bRows,bCols)` runtime contract, with operation-bound before/post dimensions, persistence barrier and persisted retry no-op;
 - M4.3 insert/delete rows and columns through the already accepted agent-grade structural operations, under the documented usedRange full-span contract.
+- M4 integrated agent-grade persistent execution on FILE_ID 1231187 at tested HEAD `0d06fc9c63bff528d875b4bb1554d7e3b148499f`: extended formatting, border, layout, merge, conditional formatting and freeze all passed primitive `LIVE_VERIFY`, followed by a fresh same-session whole-task verification where all six effects classified as satisfied. Task invocation 1 used exactly one editor session, performed 8 verified writes, used one successful persistence barrier and closed. The separate persisted retry invocation used exactly one new editor session, classified all six effects as no-op, performed 0 writes, used no persistence barrier and closed. Acceptance: `XLSX M4 INTEGRATED PERSISTENT LIVE ACCEPTANCE: PASS`, exit 0.
 
 ## Fail-closed hardening already covered
 
@@ -60,16 +61,9 @@ The following paths have direct runtime acceptance on the persistent-session bra
 - format_range refuses properties without a semantic verification contract (including border in the current agent-grade task contract) and fails closed if requested formatting cannot be measured;
 - AutoFit retry is bound to the operation plus measured before/post dimensions and fails closed if the current dimension matches neither accepted state.
 
-## Implemented and STATIC PASS; awaiting integrated TRUE LIVE acceptance
+## Integrated M4 TRUE LIVE acceptance
 
-- extended format_range readback for font color, fill color and vertical alignment, with the upstream ONLYOFFICE vertical enum (bottom=0, center=1, distributed=2, justify=3, top=4);
-- border formatting verifier for all eight supported border positions, all upstream line-style enum values and RGB readback through the live internal cell model;
-- merge/unmerge with secondary-cell data-loss protection and a fresh range-state fingerprint immediately before mutation;
-- conditional-format add/delete with the upstream one-based rule collection contract, exact AppliesTo identity, fill-color readback and ambiguity rejection;
-- freeze rows, columns, range and unfreeze through exact GetLocation bbox semantics;
-- an integrated M4 acceptance with explicit W0.12 task/session boundaries: task invocation 1 uses exactly one persistent editor session for setup, ordered edits, per-operation readback, a fresh same-session whole-task verification pass, one save-completion barrier and close; task invocation 2 is a separate persisted idempotency invocation, also exactly one editor session, and must be all-no-op with no save barrier. The second session is not part of task 1.
-
-These are not listed under TRUE LIVE PASS until the integrated runtime acceptance succeeds on the deployed 9.3.4.60 editor.
+The previously pending extended-format, border, merge/unmerge, conditional-format and freeze contracts are now accepted for the exact tested semantic surface. The integrated result proves the W0.12 invariant per task invocation: one task = one persistent editor session, with same-session readback and whole-task verification. The persisted retry is a second task invocation, not a second session inside the first task.
 
 ## Current contract limitations, not hidden PASS
 
@@ -111,8 +105,7 @@ These remain governed by `EXCEL-POWER-USER-CAPABILITY-GAPS.md` and must not be p
 
 ## Next migration order
 
-1. Complete the remaining implementable M4 agent-grade contracts: extended formatting/borders, merge/unmerge, conditional formatting and freeze panes. Keep M4.5 explicitly runtime-DEFERRED unless the deployed runtime changes.
-2. Run the integrated M4 task-1 persistent-session acceptance (one task = one editor session), then treat the persisted retry as a separate task invocation and regression before declaring M4 closed.
-3. Migrate sort/filter, data validation and defined names one family at a time into explicit agent-grade contracts.
-4. Keep charts, pivots and protected-range ACL as explicit object-identity tasks with their own verifiers rather than reducing them to callback success.
-5. Finish with a cross-capability persistent-session acceptance and update the capability gap register without converting documented runtime blockers to implementation failures.
+1. Keep M4.5 explicitly runtime-DEFERRED unless the deployed runtime changes; the remaining implementable M4 agent-grade contracts are TRUE LIVE accepted.
+2. Migrate sort/filter, data validation and defined names one family at a time into explicit agent-grade contracts.
+3. Keep charts, pivots and protected-range ACL as explicit object-identity tasks with their own verifiers rather than reducing them to callback success.
+4. Finish with a cross-capability persistent-session acceptance and update the capability gap register without converting documented runtime blockers to implementation failures.
