@@ -7,18 +7,21 @@ const scalar=z.union([z.string(),z.number(),z.boolean()])
 // Strict outer operation fields prevent silently discarded options. Family
 // planners validate the semantic combinations before credentials or browser use.
 const operation=z.object({
- intent:z.enum(['create_sheet','write_range','copy_sheet','rename_sheet','delete_sheet','format_range','layout_range','merge_range','unmerge_range','freeze_panes','unfreeze_panes','sort_range','filter_range','clear_filter','set_validation','clear_validation','set_defined_name','delete_defined_name']),
+ intent:z.enum(['create_sheet','write_range','copy_sheet','rename_sheet','delete_sheet','move_sheet','clear_range','format_range','layout_range','merge_range','unmerge_range','freeze_panes','unfreeze_panes','sort_range','filter_range','clear_filter','set_validation','clear_validation','set_defined_name','rename_defined_name','delete_defined_name','add_conditional_format','delete_conditional_format','create_pivot','delete_pivot_sheet']),
  sheet:str.optional(),range:str.optional(),format:z.record(z.string(),z.unknown()).optional(),
  values:z.array(z.array(z.union([scalar,z.null()]))).optional(),formulas:z.array(z.array(z.string().nullable())).optional(),
  type:z.enum(['column.width','row.height','columns.hidden','rows.hidden']).optional(),
  width:z.number().positive().optional(),height:z.number().positive().optional(),hidden:z.boolean().optional(),
  mode:z.enum(['rows','columns','at']).optional(),count:z.number().int().positive().optional(),
+ referenceSheet:str.optional(),position:z.enum(['before','after']).optional(),
  keyRange:str.optional(),order:z.enum(['asc','desc']).optional(),hasHeaders:z.boolean().optional(),
  field:z.number().int().positive().optional(),criteria1:z.union([scalar,z.array(scalar)]).optional(),criteria2:scalar.nullable().optional(),operator:str.optional(),
  validationType:str.optional(),alertStyle:str.optional(),formula1:scalar.optional(),formula2:scalar.optional(),
- name:str.optional(),refersTo:str.optional()
+ name:str.optional(),newName:str.optional(),refersTo:str.optional(),rule:z.record(z.string(),z.unknown()).optional(),
+ sourceSheet:str.optional(),sourceRange:str.optional(),rowField:str.optional(),columnField:str.optional(),dataField:str.optional(),styleName:str.optional(),pivotSheet:str.optional(),
+ assertions:z.array(z.object({items:z.array(scalar).min(1),expected:scalar}).strict()).optional()
 }).strict().superRefine((op,ctx)=>{
- const fields={create_sheet:['name'],write_range:['sheet','range','values','formulas'],copy_sheet:['sheet','name'],rename_sheet:['sheet','name'],delete_sheet:['sheet'],format_range:['sheet','range','format'],layout_range:['sheet','range','type','width','height','hidden'],merge_range:['sheet','range'],unmerge_range:['sheet','range'],freeze_panes:['sheet','mode','range','count'],unfreeze_panes:['sheet'],sort_range:['sheet','range','keyRange','order','hasHeaders'],filter_range:['sheet','range','field','criteria1','criteria2','operator'],clear_filter:['sheet','range'],set_validation:['sheet','range','validationType','alertStyle','operator','formula1','formula2'],clear_validation:['sheet','range'],set_defined_name:['name','refersTo'],delete_defined_name:['name']}
+ const fields={create_sheet:['name'],write_range:['sheet','range','values','formulas'],copy_sheet:['sheet','name'],rename_sheet:['sheet','name'],delete_sheet:['sheet'],move_sheet:['sheet','referenceSheet','position'],clear_range:['sheet','range'],format_range:['sheet','range','format'],layout_range:['sheet','range','type','width','height','hidden'],merge_range:['sheet','range'],unmerge_range:['sheet','range'],freeze_panes:['sheet','mode','range','count'],unfreeze_panes:['sheet'],sort_range:['sheet','range','keyRange','order','hasHeaders'],filter_range:['sheet','range','field','criteria1','criteria2','operator'],clear_filter:['sheet','range'],set_validation:['sheet','range','validationType','alertStyle','operator','formula1','formula2'],clear_validation:['sheet','range'],set_defined_name:['name','refersTo'],rename_defined_name:['name','newName','refersTo'],delete_defined_name:['name'],add_conditional_format:['sheet','range','rule'],delete_conditional_format:['sheet','range','rule'],create_pivot:['name','sourceSheet','sourceRange','rowField','columnField','dataField','styleName','assertions'],delete_pivot_sheet:['name','pivotSheet']}
  for(const key of Object.keys(op))if(key!=='intent'&&!fields[op.intent].includes(key))ctx.addIssue({code:'custom',path:[key],message:'Field not supported by this intent'})
 })
 const input={file_id:z.string().regex(/^[1-9][0-9]*$/),operations:z.array(operation).min(1).max(100)}
@@ -47,10 +50,10 @@ function makeHandler(deps={}){
 function register(server,deps){
  server.tool('office_xlsx_batch',
   'Execute final-state Excel operations in ONE persistent ONLYOFFICE editor session per call. '+
-  'Supports sheet create/copy/rename/delete, range writes, format, fixed layout, merge/unmerge, freeze, sort, filter, durable validation, workbook name set/delete. '+
+  'Supports sheet create/copy/rename/delete, range writes, format, fixed layout, merge/unmerge, freeze, sort, filter, durable validation, workbook names, conditional formatting and tested pivot create/delete. '+
   'Read/edit/read, read-only whole-task verification, then one save barrier and close. '+
   'Submit all compatible goals together; only one goal per family per sheet/name. Not transactional. '+
-  'Core sheet/write operations must precede enhanced operations. No AutoFit, charts, pivots or conditional formatting. '+
+  'Core sheet/write operations must precede enhanced operations. No AutoFit or charts. '+
   'Examples: {intent:"format_range",sheet:"Sheet1",range:"A1:B2",format:{bold:true}}; '+
   '{intent:"set_defined_name",name:"ReportRange",refersTo:"=Sheet1!$A$1:$B$2"}.',input,makeHandler(deps))
 }
