@@ -1,6 +1,6 @@
 # XLSX agent-grade persistent execution migration status
 
-Audit date: 2026-09-16
+Audit date: 2026-09-17
 Branch: `feature/xlsx-persistent-live-session`
 Runtime acceptance workbook: FILE_ID 1231187
 
@@ -67,7 +67,7 @@ The following paths have direct runtime acceptance on the persistent-session bra
 - merge/unmerge with secondary-cell data-loss protection and a fresh range-state fingerprint immediately before mutation;
 - conditional-format add/delete with the upstream one-based rule collection contract, exact AppliesTo identity, fill-color readback and ambiguity rejection;
 - freeze rows, columns, range and unfreeze through exact GetLocation bbox semantics;
-- a two-editor-session integrated M4 acceptance: one persistent setup/edit/readback task with a single persistence barrier, followed by a persisted all-no-op retry.
+- an integrated M4 acceptance with explicit W0.12 task/session boundaries: task invocation 1 uses exactly one persistent editor session for setup, ordered edits, per-operation readback, a fresh same-session whole-task verification pass, one save-completion barrier and close; task invocation 2 is a separate persisted idempotency invocation, also exactly one editor session, and must be all-no-op with no save barrier. The second session is not part of task 1.
 
 These are not listed under TRUE LIVE PASS until the integrated runtime acceptance succeeds on the deployed 9.3.4.60 editor.
 
@@ -112,7 +112,7 @@ These remain governed by `EXCEL-POWER-USER-CAPABILITY-GAPS.md` and must not be p
 ## Next migration order
 
 1. Complete the remaining implementable M4 agent-grade contracts: extended formatting/borders, merge/unmerge, conditional formatting and freeze panes. Keep M4.5 explicitly runtime-DEFERRED unless the deployed runtime changes.
-2. Run one integrated M4 persistent-session acceptance and persisted retry regression before declaring M4 closed.
+2. Run the integrated M4 task-1 persistent-session acceptance (one task = one editor session), then treat the persisted retry as a separate task invocation and regression before declaring M4 closed.
 3. Migrate sort/filter, data validation and defined names one family at a time into explicit agent-grade contracts.
 4. Keep charts, pivots and protected-range ACL as explicit object-identity tasks with their own verifiers rather than reducing them to callback success.
 5. Finish with a cross-capability persistent-session acceptance and update the capability gap register without converting documented runtime blockers to implementation failures.
