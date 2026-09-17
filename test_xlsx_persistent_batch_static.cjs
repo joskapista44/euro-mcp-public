@@ -8,6 +8,20 @@ const sort=require('./xlsx-persistent-sort.cjs')
  let reads=0
  const invalid=await batch.executeBatchTask({task:{operations:[op,{intent:'unknown'}]},api:{inspect(){reads++}}})
  assert.equal(invalid.ok,false);assert.equal(reads,0)
+ assert.equal(batch.planTask({operations:[op,{intent:'create_sheet',name:'N'}]}).outcome,'xlsx-batch-core-operations-must-come-first')
+ const coreTask={operations:[{intent:'create_sheet',name:'N'},{intent:'write_range',sheet:'N',range:'A1:B1',values:[['x',1]]}]}
+ const sheets=new Set(['S']);let coreWrites=0,matrix=null
+ const coreApi={
+  inspect:async()=>({ok:true,authority:'LIVE_READ',sheets:[...sheets].map(name=>({name}))}),
+  readRange:async()=>({ok:true,authority:'LIVE_READ',cells:matrix?matrix.map((row,r)=>row.map((value,c)=>({address:String.fromCharCode(65+c)+(r+1),rawValue:value,value,displayText:String(value)}))):[[{address:'A1',dataType:'blank'},{address:'B1',dataType:'blank'}]]}),
+  createSheetVerified:async name=>{sheets.add(name);coreWrites++;return {ok:true,authority:'LIVE_VERIFY',noOp:false}},
+  writeRangeVerified:async spec=>{matrix=spec.values;coreWrites++;return {ok:true,authority:'LIVE_VERIFY',noOp:false}},
+  copySheetVerified:async()=>{throw Error('unexpected')},renameSheetVerified:async()=>{throw Error('unexpected')},deleteSheetVerified:async()=>{throw Error('unexpected')}
+ }
+ const coreFirst=await batch.executeBatchTask({task:coreTask,api:coreApi})
+ assert.equal(coreFirst.ok,true);assert.equal(coreFirst.noOp,false);assert.equal(coreWrites,2);assert.equal(coreFirst.wholeTaskVerification.checks.length,2)
+ const coreRetry=await batch.executeBatchTask({task:coreTask,api:coreApi})
+ assert.equal(coreRetry.ok,true);assert.equal(coreRetry.noOp,true);assert.equal(coreWrites,2)
  const original=sort.runCommand
  let ordered=false,writes=0,applyCalls=0
  const session={markWrite(){writes++}}
@@ -32,5 +46,5 @@ const sort=require('./xlsx-persistent-sort.cjs')
   const failed=await batch.executeBatchTask({task:{operations:[op]},api})
   assert.equal(failed.outcome,'xlsx-batch-whole-verify-failed');assert.equal(applyCalls,1)
  }finally{sort.runCommand=original}
- console.log('XLSX BATCH STATIC: PASS (preflight, conflicts, retry, read-only final verification)')
+ console.log('XLSX BATCH STATIC: PASS (preflight, core create/write, conflicts, retry, read-only final verification)')
 })().catch(e=>{console.error(e);process.exitCode=1})
