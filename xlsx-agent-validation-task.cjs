@@ -14,9 +14,10 @@ function planTask(task){
  if(!ALERT_STYLES.has(alertStyle))return {ok:false,outcome:'xlsx-validation-task-invalid-alert-style',authority:'PLAN_ONLY',writeAllowed:false}
  if(!OPERATORS.has(operator))return {ok:false,outcome:'xlsx-validation-task-invalid-operator',authority:'PLAN_ONLY',writeAllowed:false}
  if(op.formula1==null)return {ok:false,outcome:'xlsx-validation-task-formula-required',authority:'PLAN_ONLY',writeAllowed:false}
- const str=(v,d='')=>v==null?d:String(v),bool=(v,d)=>v==null?d:v
- const operation={index:0,intent:op.intent,sheet:op.sheet,range:p.address,validationType:op.validationType,alertStyle,operator,formula1:str(op.formula1),formula2:str(op.formula2),ignoreBlank:bool(op.ignoreBlank,true),inCellDropdown:bool(op.inCellDropdown,true),inputMessage:str(op.inputMessage),inputTitle:str(op.inputTitle),showError:bool(op.showError,true),showInput:bool(op.showInput,true),errorMessage:str(op.errorMessage),errorTitle:str(op.errorTitle)}
- for(const k of ['ignoreBlank','inCellDropdown','showError','showInput'])if(typeof operation[k]!=='boolean')return {ok:false,outcome:'xlsx-validation-task-invalid-option',authority:'PLAN_ONLY',writeAllowed:false,option:k}
+ const unsupported=['ignoreBlank','inCellDropdown','inputMessage','inputTitle','showError','showInput','errorMessage','errorTitle']
+ for(const option of unsupported)if(Object.hasOwn(op,option))return {ok:false,outcome:'xlsx-validation-task-option-not-persistable',authority:'PLAN_ONLY',writeAllowed:false,option}
+ const str=v=>v==null?'':String(v)
+ const operation={index:0,intent:op.intent,sheet:op.sheet,range:p.address,validationType:op.validationType,alertStyle,operator,formula1:str(op.formula1),formula2:str(op.formula2)}
  return {ok:true,outcome:'xlsx-validation-task-planned',authority:'PLAN_ONLY',writeAllowed:true,operation}
 }
 function identity(inv,name){return (inv?.sheets||[]).filter(x=>x?.name===name).length===1}
