@@ -21,7 +21,10 @@ function filterObserveCommand(spec){
   if(!state.measurable||!state.present||state.range!==normAddr(spec.range)||state.filters.length!==1)return false
   var f=state.filters[0];return f.field===spec.field&&String(f.operator)==String(spec.operator)&&same(f.criteria1,spec.criteria1)&&same(f.criteria2,spec.criteria2==null?null:spec.criteria2)
  }
- function matchesClear(state){return !!state.measurable&&(!state.present||state.range===normAddr(spec.range))&&state.filterMode!==true&&state.filters.length===0}
+ // ShowAllData clears active criteria but deliberately preserves the AutoFilter
+ // controls. GetFilterMode can therefore remain true; the authoritative clear
+ // proof is the exact filter range with zero active filters.
+ function matchesClear(state){return !!state.measurable&&(!state.present||state.range===normAddr(spec.range))&&state.filters.length===0}
  try{
   var intent=spec&&spec.intent||'filter_range'
   if(!spec||typeof spec.sheet!=='string'||typeof spec.range!=='string'||(intent!=='filter_range'&&intent!=='clear_filter'))return {ok:false,outcome:'invalid-filter-spec',source:'live-coedit-editor'}
