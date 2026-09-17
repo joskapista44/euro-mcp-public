@@ -80,6 +80,20 @@ The structural four-operation contract is the measured full-span operation over 
 
 The current `format_range` TRUE LIVE PASS covers only properties for which the deployed editor provides stable semantic readback. Extended color/vertical-alignment, borders, `merge_range`, the tested M4.6 conditional-format rule surface and freeze-at-range are TRUE LIVE accepted by the integrated run. This is not a blanket acceptance of every possible formatting, conditional-formatting, freeze, or merge variant. `unmerge_range` is also TRUE LIVE accepted by its dedicated persistent-session acceptance.
 
+## M6.1 sort/filter migration audit (2026-09-17)
+
+The existing M6.1 implementation remains a valid primitive-level LIVE PASS, but it is not yet W0.12-style agent-grade execution:
+
+- `m61-live-acceptance.cjs` performs its own browser login/editor navigation and uses fixed 2.5 s and 22 s waits instead of the minimal persistent editor-session wrapper;
+- operations are called as pre-expanded low-level commands rather than through an explicit agent task planner;
+- sort lacks fresh mutation-boundary range fingerprint comparison and persisted already-satisfied/no-op classification;
+- filter enable readback does not require exact requested range identity;
+- filter set readback proves an active readable filter but does not prove exact field/operator/criteria identity;
+- reapply reports before/after state without a semantic requested-final-state assertion;
+- there is no task-level whole-state verifier, change receipt, single save-completion barrier, or persisted retry contract.
+
+Migration will proceed one semantic family at a time: sort first, then filter. The old direct-Playwright acceptance must not be used as agent-grade authority.
+
 ## Power User capabilities not yet migrated into the agent task vocabulary
 
 The repository already has LIVE implementations/acceptances for capabilities outside the current W0.12-style agent task vocabulary. They are not automatically agent-grade merely because their earlier Power User acceptance is green. Remaining migration candidates include:
