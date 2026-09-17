@@ -54,6 +54,18 @@ function match(state,op){
  if(op.series&&op.series.some(w=>{const a=(state.series||[]).find(x=>x.index===w.index);return !a||Object.keys(w).some(k=>a[k]!==w[k])}))return false
  return true
 }
+function advancedMutationSpecs(before,op){
+ const p=op.presentation||{},calls=[]
+ // ApplyChartStyle resets presentation state. Build underlying style/data first,
+ // then apply the requested legend/axes/labels as the final semantic layer.
+ if(p.style!=null&&Number(before.style)!==p.style)calls.push({runner:'presentation',spec:{type:'chart.presentation.style',sheet:op.sheet,name:op.name,style:p.style}})
+ for(const wanted of op.series||[]){const old=(before.series||[]).find(s=>s.index===wanted.index)||{};if(wanted.name!=null&&old.name!==wanted.name)calls.push({runner:'data',spec:{type:'chart.data.seriesName',sheet:op.sheet,name:op.name,seriesIndex:wanted.index,value:wanted.name}});if(wanted.valuesRange!=null&&old.valuesRange!==wanted.valuesRange)calls.push({runner:'data',spec:{type:'chart.data.seriesValues',sheet:op.sheet,name:op.name,seriesIndex:wanted.index,range:wanted.valuesRange}});if(wanted.xValuesRange!=null&&old.xValuesRange!==wanted.xValuesRange)calls.push({runner:'data',spec:{type:'chart.data.seriesXValues',sheet:op.sheet,name:op.name,seriesIndex:wanted.index,range:wanted.xValuesRange}});if(wanted.categoryRange!=null&&old.categoryRange!==wanted.categoryRange)calls.push({runner:'data',spec:{type:'chart.data.categoryFormula',sheet:op.sheet,name:op.name,seriesIndex:wanted.index,range:wanted.categoryRange}})}
+ if(op.chartPosition&&(!before.position||['fromCol','colOffset','fromRow','rowOffset'].some(k=>Number(before.position[k])!==Number(op.chartPosition[k]))))calls.push({runner:'data',spec:{type:'chart.object.position',sheet:op.sheet,name:op.name,...op.chartPosition}})
+ if(p.legendPosition!=null&&before.legendPosition!==p.legendPosition)calls.push({runner:'presentation',spec:{type:'chart.presentation.legend',sheet:op.sheet,name:op.name,position:p.legendPosition}})
+ if((p.horizontalAxisTitle!=null&&before.horizontalAxisTitle!==p.horizontalAxisTitle)||(p.verticalAxisTitle!=null&&before.verticalAxisTitle!==p.verticalAxisTitle))calls.push({runner:'presentation',spec:{type:'chart.presentation.axisTitles',sheet:op.sheet,name:op.name,horizontal:p.horizontalAxisTitle,vertical:p.verticalAxisTitle}})
+ if(p.dataLabels!=null){const expected={showSerName:p.dataLabels.showSeriesName,showCatName:p.dataLabels.showCategoryName,showVal:p.dataLabels.showValue,showPercent:p.dataLabels.showPercent};if(!before.dataLabels||Object.keys(expected).some(k=>before.dataLabels[k]!==expected[k]))calls.push({runner:'presentation',spec:{type:'chart.presentation.dataLabels',sheet:op.sheet,name:op.name,...p.dataLabels}})}
+ return calls
+}
 async function chartObserved(session,op,apply){
  const inspect=()=>semanticState(session,op)
  const beforeRead=await inspect()
@@ -73,14 +85,7 @@ async function chartObserved(session,op,apply){
  let changed=null
  if(command){changed=await runChartInFrame(session.frame,session.apiWhere,command,8000);mutations.push(changed);if(changed?.ok&&changed?.verification?.status==='PASS')mutated=true;if(!changed?.ok||changed?.verification?.status!=='PASS')return {ok:false,outcome:'chart-mutation-unverified',source:'live-coedit-editor',state:before,mutation:changed,mutationAttempted:mutated,verification:{measurable:true,match:false}}}
  if(op.intent==='set_chart'){
-  const p=op.presentation||{},calls=[]
-  if(p.legendPosition!=null&&before.legendPosition!==p.legendPosition)calls.push([runChartPresentationInFrame,{type:'chart.presentation.legend',sheet:op.sheet,name:op.name,position:p.legendPosition}])
-  if((p.horizontalAxisTitle!=null&&before.horizontalAxisTitle!==p.horizontalAxisTitle)||(p.verticalAxisTitle!=null&&before.verticalAxisTitle!==p.verticalAxisTitle))calls.push([runChartPresentationInFrame,{type:'chart.presentation.axisTitles',sheet:op.sheet,name:op.name,horizontal:p.horizontalAxisTitle,vertical:p.verticalAxisTitle}])
-  if(p.dataLabels!=null){const expected={showSerName:p.dataLabels.showSeriesName,showCatName:p.dataLabels.showCategoryName,showVal:p.dataLabels.showValue,showPercent:p.dataLabels.showPercent};if(!before.dataLabels||Object.keys(expected).some(k=>before.dataLabels[k]!==expected[k]))calls.push([runChartPresentationInFrame,{type:'chart.presentation.dataLabels',sheet:op.sheet,name:op.name,...p.dataLabels}])}
-  if(p.style!=null&&Number(before.style)!==p.style)calls.push([runChartPresentationInFrame,{type:'chart.presentation.style',sheet:op.sheet,name:op.name,style:p.style}])
-  if(op.chartPosition&&(!before.position||['fromCol','colOffset','fromRow','rowOffset'].some(k=>Number(before.position[k])!==Number(op.chartPosition[k]))))calls.push([runChartDataObjectInFrame,{type:'chart.object.position',sheet:op.sheet,name:op.name,...op.chartPosition}])
-  for(const wanted of op.series||[]){const old=(before.series||[]).find(s=>s.index===wanted.index)||{};if(wanted.name!=null&&old.name!==wanted.name)calls.push([runChartDataObjectInFrame,{type:'chart.data.seriesName',sheet:op.sheet,name:op.name,seriesIndex:wanted.index,value:wanted.name}]);if(wanted.valuesRange!=null&&old.valuesRange!==wanted.valuesRange)calls.push([runChartDataObjectInFrame,{type:'chart.data.seriesValues',sheet:op.sheet,name:op.name,seriesIndex:wanted.index,range:wanted.valuesRange}]);if(wanted.xValuesRange!=null&&old.xValuesRange!==wanted.xValuesRange)calls.push([runChartDataObjectInFrame,{type:'chart.data.seriesXValues',sheet:op.sheet,name:op.name,seriesIndex:wanted.index,range:wanted.xValuesRange}]);if(wanted.categoryRange!=null&&old.categoryRange!==wanted.categoryRange)calls.push([runChartDataObjectInFrame,{type:'chart.data.categoryFormula',sheet:op.sheet,name:op.name,seriesIndex:wanted.index,range:wanted.categoryRange}])}
-  for(const [fn,spec] of calls){const r=await fn(session.frame,session.apiWhere,spec,8000);mutations.push(r);if(r?.ok&&r?.verification?.status==='PASS')mutated=true;else return {ok:false,outcome:'chart-mutation-unverified',source:'live-coedit-editor',state:before,mutation:r,mutations,mutationAttempted:mutated,verification:{measurable:true,match:false}}}
+  for(const call of advancedMutationSpecs(before,op)){const fn=call.runner==='presentation'?runChartPresentationInFrame:runChartDataObjectInFrame,r=await fn(session.frame,session.apiWhere,call.spec,8000);mutations.push(r);if(r?.ok&&r?.verification?.status==='PASS')mutated=true;else return {ok:false,outcome:'chart-mutation-unverified',source:'live-coedit-editor',state:before,mutation:r,mutations,mutationAttempted:mutated,verification:{measurable:true,match:false}}}
  }
  const afterRead=await inspect()
  if(!afterRead?.ok)return {ok:false,outcome:'chart-post-state-unverifiable',source:'live-coedit-editor',mutation:changed,mutations,mutationAttempted:mutated,readback:afterRead}
@@ -92,4 +97,4 @@ async function executeChartTaskInPersistentSession(options={}){
  return persistent.withPersistentXlsxSession(options,api=>agent.executeChartTask({task:options.task,api:{...api,chartObserved:async(op,apply)=>{const r=await chartObserved(api.session,op,apply);if(apply&&(r?.applied||r?.mutationAttempted))api.session.markWrite();return r}}}))
 }
 const runCommand=chartObserved
-module.exports={chartSemanticStateCommand,semanticState,stateOf,match,chartObserved,runCommand,executeChartTaskInPersistentSession}
+module.exports={chartSemanticStateCommand,semanticState,stateOf,match,advancedMutationSpecs,chartObserved,runCommand,executeChartTaskInPersistentSession}
