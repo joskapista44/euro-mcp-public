@@ -19,6 +19,22 @@ const core={
  agent:require('./xlsx-agent-task.cjs'),
  execute:'executeTask'
 }
+function clone(v){return JSON.parse(JSON.stringify(v))}
+function coreFinalOperations(operations,tail){
+ const final=clone(operations)
+ for(const write of final.filter(op=>op.intent==='write_range')){
+  const sheet=core.agent.finalSheetName(write.sheet,operations,write.index),wr=parseA1Range(write.range)
+  for(const clear of tail.filter(op=>op?.intent==='clear_range'&&op.sheet===sheet)){
+   const cr=parseA1Range(clear.range);if(!cr)continue
+   const r0=Math.max(wr.start.row,cr.start.row),r1=Math.min(wr.end.row,cr.end.row),c0=Math.max(wr.start.column,cr.start.column),c1=Math.min(wr.end.column,cr.end.column)
+   for(let r=r0;r<=r1;r++)for(let c=c0;c<=c1;c++){
+    write.values[r-wr.start.row][c-wr.start.column]=null
+    if(write.formulas)write.formulas[r-wr.start.row][c-wr.start.column]=null
+   }
+  }
+ }
+ return final
+}
 const families=definitions.map(([file,intents,fn,method])=>({
  file,intents,method,agent:require('./xlsx-agent-'+file+'-task.cjs'),
  transport:require('./xlsx-persistent-'+file+'.cjs'),execute:'execute'+fn+'Task'
@@ -37,7 +53,7 @@ function planTask(task){
  if(coreCount){
   const planned=core.agent.planTask({operations:task.operations.slice(0,coreCount)})
   if(!planned.ok)return planned
-  steps.push({index:0,family:'core',operations:planned.operations})
+  steps.push({index:0,family:'core',operations:planned.operations,verifyOperations:coreFinalOperations(planned.operations,task.operations.slice(coreCount))})
  }
  for(const [index,op] of task.operations.entries()){
   if(index<coreCount)continue
@@ -101,7 +117,7 @@ async function executeBatchTask({task,api}){
  }
  for(const step of plan.steps){
   const f=step.family==='core'?core:families.find(f=>f.file===step.family)
-  const operations=step.operations||[step.operation]
+  const operations=step.verifyOperations||step.operations||[step.operation]
   const result=await f.agent[f.execute]({task:{operations},api:step.family==='core'?coreAdapter(api,true):adapter(api,f,true)})
   const ok=result.ok&&result.authority==='LIVE_VERIFY'&&result.noOp===true
   for(const op of operations)checks.push({index:op.index,intent:op.intent,ok})
@@ -113,4 +129,4 @@ async function executeBatchTaskInPersistentSession(options={}){
  const plan=planTask(options.task);if(!plan.ok)return {...plan,writeAllowed:false}
  return require('./xlsx-persistent-session.cjs').withPersistentXlsxSession(options,api=>executeBatchTask({task:options.task,api}))
 }
-module.exports={planTask,adapter,coreAdapter,executeBatchTask,executeBatchTaskInPersistentSession}
+module.exports={planTask,coreFinalOperations,adapter,coreAdapter,executeBatchTask,executeBatchTaskInPersistentSession}
