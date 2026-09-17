@@ -44,6 +44,7 @@ The following paths have direct runtime acceptance on the persistent-session bra
 - M4.3 AutoFit columns and rows using the measured direct-range `AutoFit(bRows,bCols)` runtime contract, with operation-bound before/post dimensions, persistence barrier and persisted retry no-op;
 - M4.3 insert/delete rows and columns through the already accepted agent-grade structural operations, under the documented usedRange full-span contract.
 - M4 integrated agent-grade persistent execution on FILE_ID 1231187 at tested HEAD `0d06fc9c63bff528d875b4bb1554d7e3b148499f`: extended formatting, border, layout, merge, conditional formatting and freeze all passed primitive `LIVE_VERIFY`, followed by a fresh same-session whole-task verification where all six effects classified as satisfied. Task invocation 1 used exactly one editor session, performed 8 verified writes, used one successful persistence barrier and closed. The separate persisted retry invocation used exactly one new editor session, classified all six effects as no-op, performed 0 writes, used no persistence barrier and closed. Acceptance: `XLSX M4 INTEGRATED PERSISTENT LIVE ACCEPTANCE: PASS`, exit 0.
+- `unmerge_range` dedicated TRUE LIVE acceptance on FILE_ID 1231187 at tested HEAD `3867e0c77d882edde674460b90ee126a6d73d93d`: task invocation 1 used one editor session, performed fixture preparation plus merge/unmerge as 4 verified writes, completed fresh same-session whole-task verification, used one successful persistence barrier and closed. The separate idempotent retry used one new editor session, performed 0 writes, completed whole-task verification, used no barrier and closed. Acceptance: `XLSX PERSISTENT UNMERGE LIVE ACCEPTANCE: PASS`.
 
 ## Fail-closed hardening already covered
 
@@ -63,7 +64,7 @@ The following paths have direct runtime acceptance on the persistent-session bra
 
 ## Integrated M4 TRUE LIVE acceptance
 
-The previously pending extended-format, border, `merge_range`, conditional-format and freeze contracts are now accepted for the exact tested semantic surface. `unmerge_range` remains implemented and STATIC PASS but still requires its own TRUE LIVE acceptance. The integrated result proves the W0.12 invariant per task invocation: one task = one persistent editor session, with same-session readback and whole-task verification. The persisted retry is a second task invocation, not a second session inside the first task.
+The previously pending extended-format, border, merge/unmerge, conditional-format and freeze contracts are now TRUE LIVE accepted for the exact tested semantic surface. The integrated result proves the W0.12 invariant per task invocation: one task = one persistent editor session, with same-session readback and whole-task verification. The persisted retry is a second task invocation, not a second session inside the first task.
 
 ## Current contract limitations, not hidden PASS
 
@@ -77,7 +78,7 @@ The structural four-operation contract is the measured full-span operation over 
 
 ### Formatting
 
-The current `format_range` TRUE LIVE PASS covers only properties for which the deployed editor provides stable semantic readback. Extended color/vertical-alignment, borders, `merge_range`, the tested M4.6 conditional-format rule surface and freeze-at-range are TRUE LIVE accepted by the integrated run. This is not a blanket acceptance of every possible formatting, conditional-formatting, freeze, or merge variant. `unmerge_range` remains STATIC PASS pending dedicated TRUE LIVE acceptance.
+The current `format_range` TRUE LIVE PASS covers only properties for which the deployed editor provides stable semantic readback. Extended color/vertical-alignment, borders, `merge_range`, the tested M4.6 conditional-format rule surface and freeze-at-range are TRUE LIVE accepted by the integrated run. This is not a blanket acceptance of every possible formatting, conditional-formatting, freeze, or merge variant. `unmerge_range` is also TRUE LIVE accepted by its dedicated persistent-session acceptance.
 
 ## Power User capabilities not yet migrated into the agent task vocabulary
 
@@ -105,7 +106,7 @@ These remain governed by `EXCEL-POWER-USER-CAPABILITY-GAPS.md` and must not be p
 
 ## Next migration order
 
-1. Run dedicated `unmerge_range` TRUE LIVE acceptance; keep M4.5 explicitly runtime-DEFERRED unless the deployed runtime changes.
+1. Keep M4.5 explicitly runtime-DEFERRED unless the deployed runtime changes; the current implementable M4 agent-grade scope is TRUE LIVE accepted.
 2. Migrate sort/filter, data validation and defined names one family at a time into explicit agent-grade contracts.
 3. Keep charts, pivots and protected-range ACL as explicit object-identity tasks with their own verifiers rather than reducing them to callback success.
 4. Finish with a cross-capability persistent-session acceptance and update the capability gap register without converting documented runtime blockers to implementation failures.
