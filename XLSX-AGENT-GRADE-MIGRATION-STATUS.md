@@ -121,12 +121,13 @@ These remain governed by `EXCEL-POWER-USER-CAPABILITY-GAPS.md` and must not be p
 - M4.5 genuine Excel Table/ListObject identity on deployed 9.3.4.60: DEFERRED;
 - M5.4 chart copy/duplicate: runtime UNSUPPORTED;
 - M7 classic whole-sheet password protection: runtime UNSUPPORTED;
+- M7 protected-range W0.12 identity: DEFERRED. Named-user ACL getters are measurable, but the deployed public API has no proven protected-range address getter. Therefore create/retry cannot prove that an existing titled object protects the requested cells; title plus ACL identity is insufficient for agent-grade no-op classification;
 - M7 protected-range SetRange and SetAnyoneType semantic readback: DEFERRED;
 - M7 protected-range delete: runtime UNSUPPORTED.
 
 ## Next migration order
 
 1. Keep M4.5 explicitly runtime-DEFERRED unless the deployed runtime changes; the current implementable M4 agent-grade scope is TRUE LIVE accepted.
-2. Migrate M6.4 pivot tables, then the implementable M7 protected-range ACL core.
+2. Migrate M6.4 pivot tables. Keep M7 protected-range ACL primitive-only until exact protected-range address readback exists.
 3. Keep charts, pivots and protected-range ACL as explicit object-identity tasks with their own verifiers rather than reducing them to callback success.
 4. Finish with a cross-capability persistent-session acceptance and update the capability gap register without converting documented runtime blockers to implementation failures.
