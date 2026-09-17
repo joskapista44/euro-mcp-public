@@ -110,7 +110,10 @@ async function executeBatchTask({task,api}){
  const steps=[],checks=[]
  for(const step of plan.steps){
   const f=step.family==='core'?core:families.find(f=>f.file===step.family)
-  const operations=step.operations||[step.operation]
+  // Core writes are projected to the requested final state. A later clear of
+  // the same cells makes the intermediate values dead writes on both apply
+  // and retry, so they must never be dispatched.
+  const operations=step.verifyOperations||step.operations||[step.operation]
   const result=await f.agent[f.execute]({task:{operations},api:step.family==='core'?coreAdapter(api,false):adapter(api,f,false)})
   steps.push({index:step.index,intent:step.family==='core'?'core_task':step.operation.intent,result})
   if(!result.ok||result.authority!=='LIVE_VERIFY')return {ok:false,outcome:'xlsx-batch-step-failed',authority:'LIVE_READ',writeAllowed:false,steps}
