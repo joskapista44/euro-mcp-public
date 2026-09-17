@@ -157,11 +157,11 @@ The same `office_xlsx_batch` tool now also accepts `create_sheet`, `write_range`
 
 The expanded stdio acceptance passed: create sheet → write range → rename sheet → format header → set defined name ran in one MCP task with exactly 5 verified writes and one successful save barrier. The second MCP invocation reopened the workbook and proved all five goals with 0 writes and no barrier. Measured open/task times were 3080/1580 ms for apply and 2761/302 ms for retry. Copy/delete remain covered by their earlier dedicated TRUE LIVE acceptances but are not re-exercised in this combined fixture.
 
-### Wider MCP batch candidate — STATIC PASS, LIVE pending
+### Wider MCP batch — STATIC PASS and TRUE LIVE PASS
 
 The MCP vocabulary now additionally composes `move_sheet`, `clear_range`, defined-name rename, conditional-format add/delete and the narrow accepted pivot create/delete contract. Original task indexes are preserved in batch-level verification reports (fixing the prior cosmetic 0 indexes on enhanced operations). Static tests cover the conditional-format adapter, write blocking during final verification and original-index mapping.
 
-The next and intended final broad runtime gate combines nine goals in one MCP request: create, write, rename, move, clear, format, conditional format, defined name and pivot. Expected first invocation: one editor session, 9 verified writes and one save barrier. Expected persisted retry: one editor session, 0 writes and no barrier. Range move and structural insert/delete are intentionally not exposed through this natural-retry batch yet because their accepted contracts require operation-bound retry tokens; replaying them without the returned token could repeat a destructive mutation. AutoFit has the same token-bound constraint. Charts remain the major already-LIVE capability family still outside the W0.12 MCP vocabulary.
+The broad runtime gate passed nine goals in one MCP request: create, write, rename, move, clear, format, conditional format, defined name and pivot. Final-state canonicalization removed the dead intermediate value covered by the later clear. The first invocation used one editor session, 8 verified writes, read-only whole-task verification and one successful save barrier. The persisted retry used one editor session, proved all nine goals, performed 0 writes and used no barrier. Measured open/task times were 3350/2040 ms for apply and 2843/696 ms for retry. Range move and structural insert/delete are intentionally not exposed through this natural-retry batch yet because their accepted contracts require operation-bound retry tokens; replaying them without the returned token could repeat a destructive mutation. AutoFit has the same token-bound constraint. Charts remain the major already-LIVE capability family still outside the W0.12 MCP vocabulary.
 
 ### Wider MCP batch first runtime finding
 
@@ -172,3 +172,7 @@ The first nine-goal run executed all nine mutations successfully but correctly f
 After the read-only projection fix, the first invocation passed all nine final checks, used one editor session, performed 9 writes and completed the save barrier. The persisted retry then failed closed with 0 writes because its apply-phase core classifier still compared against the overwritten intermediate value. This confirmed that projection only during final verification was insufficient.
 
 The final-state projection is now used for both dispatch planning and final verification. A core value later covered by `clear_range` is a dead intermediate write and is canonicalized to blank before dispatch. The expected first-run write count is therefore 8, not 9; retry remains 0. Static regression now requires `[null,null]` for apply and verify projections. The nine-goal runtime retry gate remains pending and the first invocation above is not treated as complete two-invocation acceptance.
+
+### Nine-goal MCP acceptance result
+
+User-reported result: `XLSX BATCH MCP LIVE ACCEPTANCE: PASS`. All batch-level checks preserve the original operation indexes 0–8. This closes the shared MCP orchestration gate for the currently exposed non-chart vocabulary. The remaining implementation work is chart agent-grade migration plus an explicit design for operation-bound retry-token families; documented runtime gaps remain exclusions, not failures.
