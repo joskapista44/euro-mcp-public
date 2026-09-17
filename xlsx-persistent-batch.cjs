@@ -41,12 +41,37 @@ const families=definitions.map(([file,intents,fn,method])=>({
  transport:require('./xlsx-persistent-'+file+'.cjs'),execute:'execute'+fn+'Task'
 }))
 const {parseA1Range}=require('./range-reader.cjs')
+function readbackPlan(task){
+ if(task?.readbacks===undefined)return {ok:true,readbacks:[]}
+ if(!Array.isArray(task.readbacks)||task.readbacks.length>10)return {ok:false,outcome:'xlsx-batch-invalid-readbacks',authority:'PLAN_ONLY'}
+ const readbacks=[],seen=new Set()
+ for(let i=0;i<task.readbacks.length;i++){
+  const item=task.readbacks[i],parsed=parseA1Range(item?.range)
+  if(typeof item?.sheet!=='string'||!item.sheet.trim()||!parsed||parsed.cellCount>400)return {ok:false,outcome:'xlsx-batch-invalid-readback',authority:'PLAN_ONLY',readbackIndex:i}
+  const key=item.sheet.toLowerCase()+':'+parsed.address
+  if(seen.has(key))return {ok:false,outcome:'xlsx-batch-duplicate-readback',authority:'PLAN_ONLY',readbackIndex:i}
+  seen.add(key);readbacks.push({sheet:item.sheet,range:parsed.address})
+ }
+ return {ok:true,readbacks}
+}
+function goalTarget(family,operation){
+ const sheet=String(operation.sheet||'').toLowerCase(),range=String(operation.range||'').toUpperCase()
+ // Independent visual regions on one worksheet are compatible final-state
+ // goals. Keeping the normalized range (and layout type) in their identity
+ // permits a rich workbook to be composed in one editor session while exact
+ // duplicate targets still fail closed.
+ if(family.file==='format'||family.file==='merge')return family.file+':'+sheet+':'+range
+ if(family.file==='layout')return family.file+':'+sheet+':'+range+':'+String(operation.type||'')
+ if(family.file==='chart')return family.file+':'+sheet+':'+String(operation.name||operation.newName||'').toLowerCase()
+ return family.file+':'+String(operation.sheet||operation.name).toLowerCase()
+}
 families.push(
  {file:'clear',intents:['clear_range'],agent:require('./xlsx-agent-clear-task.cjs'),execute:'executeClearTask',planTask:task=>{const op=task?.operations?.[0],p=op?parseA1Range(op.range):null;return task?.operations?.length===1&&op?.intent==='clear_range'&&typeof op.sheet==='string'&&op.sheet.trim()&&p?{ok:true,operation:{index:0,intent:'clear_range',sheet:op.sheet,range:p.address}}:{ok:false,outcome:'xlsx-clear-task-invalid',authority:'PLAN_ONLY'}}},
  {file:'move-sheet',intents:['move_sheet'],agent:require('./xlsx-agent-move-task.cjs'),execute:'executeMoveTask',planTask:task=>{const op=task?.operations?.[0],ok=task?.operations?.length===1&&op?.intent==='move_sheet'&&typeof op.sheet==='string'&&op.sheet.trim()&&typeof op.referenceSheet==='string'&&op.referenceSheet.trim()&&op.sheet!==op.referenceSheet&&['before','after'].includes(op.position);return ok?{ok:true,operation:{index:0,intent:'move_sheet',sheet:op.sheet,referenceSheet:op.referenceSheet,position:op.position}}:{ok:false,outcome:'xlsx-move-task-invalid',authority:'PLAN_ONLY'}}}
 )
 function planTask(task){
  if(!Array.isArray(task?.operations)||!task.operations.length||task.operations.length>100)return {ok:false,outcome:'xlsx-batch-invalid-operations',authority:'PLAN_ONLY'}
+ const plannedReadbacks=readbackPlan(task);if(!plannedReadbacks.ok)return plannedReadbacks
  const steps=[],targets=new Set()
  const firstNonCore=task.operations.findIndex(op=>!core.intents.has(op?.intent))
  const coreCount=firstNonCore<0?task.operations.length:firstNonCore
@@ -64,9 +89,9 @@ function planTask(task){
   if(family.file==='layout'&&family.agent.isAutoFit(op))return {ok:false,outcome:'xlsx-batch-autofit-not-supported',authority:'PLAN_ONLY',index}
   const plan=(family.planTask||family.agent.planTask)({operations:[op]})
   if(!plan.ok)return {...plan,index}
-  // A conservative initial contract: one final-state goal per family per sheet,
-  // or per workbook name. Avoid replaying overwritten intermediate goals.
-  const target=family.file+':'+String(op.sheet||op.name).toLowerCase()
+  // Reject exact duplicate final-state targets while allowing independent ranges
+  // and independently named objects to share a worksheet.
+  const target=goalTarget(family,plan.operation)
   if(targets.has(target))return {ok:false,outcome:'xlsx-batch-conflicting-goals',authority:'PLAN_ONLY',index}
   targets.add(target);steps.push({index,family:family.file,operation:{...plan.operation,index}})
  }
@@ -75,7 +100,7 @@ function planTask(task){
  // verified freeze. Apply and verify freeze goals last so the requested view
  // is the state persisted by the owning session.
  const orderedSteps=[...steps.filter(s=>s.family!=='freeze'),...steps.filter(s=>s.family==='freeze')]
- return {ok:true,outcome:'xlsx-batch-planned',authority:'PLAN_ONLY',steps:orderedSteps}
+ return {ok:true,outcome:'xlsx-batch-planned',authority:'PLAN_ONLY',steps:orderedSteps,readbacks:plannedReadbacks.readbacks}
 }
 function coreAdapter(api,readOnly){
  const blocked=async()=>({ok:false,outcome:'xlsx-batch-verification-write-blocked',authority:'PLAN_ONLY'})
@@ -132,10 +157,16 @@ async function executeBatchTask({task,api}){
   for(const op of operations)checks.push({index:op.index,intent:op.intent,ok})
   if(!ok)return {ok:false,outcome:'xlsx-batch-whole-verify-failed',authority:'PRIMITIVE_LIVE_VERIFY_ONLY',writeAllowed:false,steps,checks,failed:result}
  }
- return {ok:true,outcome:'xlsx-batch-live-verified',authority:'LIVE_VERIFY',writeAllowed:false,noOp:steps.every(s=>s.result.noOp===true),steps,wholeTaskVerification:{ok:true,authority:'LIVE_VERIFY',readOnly:true,checks}}
+ const readbacks=[]
+ for(const spec of plan.readbacks){
+  const observed=await api.readRange(spec)
+  if(!observed?.ok||observed.authority!=='LIVE_READ')return {ok:false,outcome:'xlsx-batch-final-readback-failed',authority:'LIVE_READ',writeAllowed:false,steps,checks,failedReadback:spec}
+  readbacks.push({authority:'LIVE_READ',source:observed.source||'live-coedit-editor',sheet:spec.sheet,range:spec.range,rows:observed.rows,columns:observed.columns,cells:observed.cells})
+ }
+ return {ok:true,outcome:'xlsx-batch-live-verified',authority:'LIVE_VERIFY',writeAllowed:false,noOp:steps.every(s=>s.result.noOp===true),steps,wholeTaskVerification:{ok:true,authority:'LIVE_VERIFY',readOnly:true,checks,readbacks}}
 }
 async function executeBatchTaskInPersistentSession(options={}){
  const plan=planTask(options.task);if(!plan.ok)return {...plan,writeAllowed:false}
  return require('./xlsx-persistent-session.cjs').withPersistentXlsxSession(options,api=>executeBatchTask({task:options.task,api}))
 }
-module.exports={planTask,coreFinalOperations,adapter,coreAdapter,executeBatchTask,executeBatchTaskInPersistentSession}
+module.exports={readbackPlan,goalTarget,planTask,coreFinalOperations,adapter,coreAdapter,executeBatchTask,executeBatchTaskInPersistentSession}

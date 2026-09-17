@@ -6,6 +6,20 @@ const cf=require('./xlsx-persistent-conditional-format.cjs')
 ;(async()=>{
  const op={intent:'sort_range',sheet:'S',range:'A1:B3',keyRange:'A1:A3'}
  assert.equal(batch.planTask({operations:[op,{...op,order:'desc'}]}).outcome,'xlsx-batch-conflicting-goals')
+ const visualRegions=batch.planTask({operations:[
+  {intent:'format_range',sheet:'S',range:'A1:H1',format:{bold:true}},
+  {intent:'format_range',sheet:'S',range:'A3:C3',format:{bold:true}},
+  {intent:'layout_range',sheet:'S',range:'A1:A20',type:'column.width',width:24},
+  {intent:'layout_range',sheet:'S',range:'B1:H20',type:'column.width',width:14},
+  {intent:'set_chart',sheet:'S',name:'Trend',range:'A3:C9',chartType:'bar',title:'Trend',expectedSeriesCount:2},
+  {intent:'set_chart',sheet:'S',name:'Regions',range:'E3:F5',chartType:'bar',title:'Regions',expectedSeriesCount:1}
+ ],readbacks:[{sheet:'S',range:'A1:H20'}]})
+ assert.equal(visualRegions.ok,true);assert.equal(visualRegions.steps.length,6);assert.deepEqual(visualRegions.readbacks,[{sheet:'S',range:'A1:H20'}])
+ assert.equal(batch.planTask({operations:[
+  {intent:'format_range',sheet:'S',range:'A1:H1',format:{bold:true}},
+  {intent:'format_range',sheet:'S',range:'A1:H1',format:{fillColor:[1,2,3]}}
+ ]}).outcome,'xlsx-batch-conflicting-goals')
+ assert.equal(batch.planTask({operations:[op],readbacks:[{sheet:'S',range:'A1:ZZ999'}]}).outcome,'xlsx-batch-invalid-readback')
  let reads=0
  const invalid=await batch.executeBatchTask({task:{operations:[op,{intent:'unknown'}]},api:{inspect(){reads++}}})
  assert.equal(invalid.ok,false);assert.equal(reads,0)
@@ -23,6 +37,8 @@ const cf=require('./xlsx-persistent-conditional-format.cjs')
  assert.equal(coreFirst.ok,true);assert.equal(coreFirst.noOp,false);assert.equal(coreWrites,2);assert.equal(coreFirst.wholeTaskVerification.checks.length,2)
  const coreRetry=await batch.executeBatchTask({task:coreTask,api:coreApi})
  assert.equal(coreRetry.ok,true);assert.equal(coreRetry.noOp,true);assert.equal(coreWrites,2)
+ const readbackResult=await batch.executeBatchTask({task:{...coreTask,readbacks:[{sheet:'N',range:'A1:B1'}]},api:coreApi})
+ assert.equal(readbackResult.ok,true);assert.equal(readbackResult.wholeTaskVerification.readbacks.length,1);assert.equal(readbackResult.wholeTaskVerification.readbacks[0].authority,'LIVE_READ');assert.equal(readbackResult.wholeTaskVerification.readbacks[0].sheet,'N')
  const indexed=batch.planTask({operations:[...coreTask.operations,{intent:'format_range',sheet:'N',range:'A1:B1',format:{bold:true}},{intent:'set_defined_name',name:'N_R',refersTo:'=N!$A$1'}]})
  assert.deepEqual(indexed.steps.map(s=>s.operations?.map(x=>x.index)||s.operation.index),[[0,1],2,3])
  const freezeLast=batch.planTask({operations:[{intent:'freeze_panes',sheet:'S',mode:'at',range:'A2'},{intent:'format_range',sheet:'S',range:'A1:B1',format:{bold:true}},{intent:'set_defined_name',name:'S_R',refersTo:'=S!$A$1'}]})

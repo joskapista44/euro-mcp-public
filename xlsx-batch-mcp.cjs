@@ -29,7 +29,8 @@ const operation=z.object({
  const fields={create_sheet:['name'],write_range:['sheet','range','values','formulas'],copy_sheet:['sheet','name'],rename_sheet:['sheet','name'],delete_sheet:['sheet'],move_sheet:['sheet','referenceSheet','position'],clear_range:['sheet','range'],format_range:['sheet','range','format'],layout_range:['sheet','range','type','width','height','hidden'],merge_range:['sheet','range'],unmerge_range:['sheet','range'],freeze_panes:['sheet','mode','range','count'],unfreeze_panes:['sheet'],sort_range:['sheet','range','keyRange','order','hasHeaders'],filter_range:['sheet','range','field','criteria1','criteria2','operator'],clear_filter:['sheet','range'],set_validation:['sheet','range','validationType','alertStyle','operator','formula1','formula2'],clear_validation:['sheet','range'],set_defined_name:['name','refersTo'],rename_defined_name:['name','newName','refersTo'],delete_defined_name:['name'],add_conditional_format:['sheet','range','rule'],delete_conditional_format:['sheet','range','rule'],create_pivot:['name','sourceSheet','sourceRange','rowField','columnField','dataField','styleName','assertions'],refresh_pivot:['name','sourceSheet','sourceRange','rowField','columnField','dataField','styleName','assertions'],delete_pivot_sheet:['name','pivotSheet'],set_chart:['sheet','name','range','chartType','title','width','height','expectedSeriesCount','inRows','presentation','chartPosition','series'],rename_chart:['sheet','name','newName','chartType','title','width','height','expectedSeriesCount','presentation','chartPosition','series'],delete_chart:['sheet','name']}
  for(const key of Object.keys(op))if(key!=='intent'&&!fields[op.intent].includes(key))ctx.addIssue({code:'custom',path:[key],message:'Field not supported by this intent'})
 })
-const input={file_id:z.string().regex(/^[1-9][0-9]*$/),operations:z.array(operation).min(1).max(100)}
+const readback=z.object({sheet:str,range:str}).strict()
+const input={file_id:z.string().regex(/^[1-9][0-9]*$/),operations:z.array(operation).min(1).max(100),readbacks:z.array(readback).max(10).optional()}
 const schema=z.object(input).strict()
 function result(payload){return {isError:payload.ok!==true,content:[{type:'text',text:JSON.stringify(payload)}]}}
 function makeHandler(deps={}){
@@ -37,7 +38,7 @@ function makeHandler(deps={}){
  return async args=>{
   const parsed=schema.safeParse(args)
   if(!parsed.success)return result({ok:false,outcome:'xlsx-batch-invalid-input',authority:'PLAN_ONLY',writeAllowed:false})
-  const {file_id,operations}=parsed.data,task={operations},plan=batch.planTask(task)
+  const {file_id,operations,readbacks}=parsed.data,task={operations,readbacks},plan=batch.planTask(task)
   if(!plan.ok)return result({...plan,writeAllowed:false})
   try{
    const caller=auth.detectCallerId()
@@ -57,7 +58,8 @@ function register(server,deps){
   'Execute final-state Excel operations in ONE persistent ONLYOFFICE editor session per call. '+
   'Supports sheet create/copy/rename/delete, range writes, format, fixed layout, merge/unmerge, freeze, sort, filter, durable validation, workbook names, conditional formatting, tested pivot create/refresh/delete, and named chart set/rename/delete with measurable presentation, position and series state. '+
   'Read/edit/read, read-only whole-task verification, then one save barrier and close. '+
-  'Submit all compatible goals together; only one goal per family per sheet/name. Not transactional. '+
+  'Optional readbacks return selected final ranges from that SAME session after whole-task verification. '+
+  'Submit all compatible final-state goals together; exact duplicate targets conflict, while independent ranges and named charts may share a worksheet. Not transactional. '+
   'Core sheet/write operations must precede enhanced operations. No AutoFit. '+
   'Examples: {intent:"format_range",sheet:"Sheet1",range:"A1:B2",format:{bold:true}}; '+
   '{intent:"set_defined_name",name:"ReportRange",refersTo:"=Sheet1!$A$1:$B$2"}.',input,makeHandler(deps))
