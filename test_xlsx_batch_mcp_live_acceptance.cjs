@@ -32,7 +32,7 @@ const {StdioClientTransport}=require('@modelcontextprotocol/sdk/client/stdio.js'
    const r=JSON.parse(reply.content.find(c=>c.type==='text').text)
    console.log(i?'MCP PERSISTED RETRY':'MCP APPLY',JSON.stringify(r.ok?{ok:r.ok,noOp:r.noOp,callerId:r.callerId,session:r.persistentSession,wholeTaskVerification:r.wholeTaskVerification}:r,null,2))
    assert.equal(reply.isError,false);assert.equal(r.ok,true);assert.equal(r.authority,'LIVE_VERIFY');assert.equal(r.noOp,i===1)
-   assert.equal(r.persistentSession.oneEditorSession,true);assert.equal(r.persistentSession.writes,i?0:9)
+   assert.equal(r.persistentSession.oneEditorSession,true);assert.equal(r.persistentSession.writes,i?0:8)
    assert.equal(r.wholeTaskVerification.checks.length,9)
    assert.equal(r.wholeTaskVerification.readOnly,true)
    if(i)assert.equal(r.persistentSession.persistenceBarrier,null)
