@@ -100,8 +100,16 @@ function chartCommand(spec) {
         else {
           var selectable=has(target,'Select')?target:(drawing&&has(drawing,'Select')?drawing:null)
           if(!selectable)return fail('unsupported','chart deletion is unavailable: no public Delete() or Select() on matching chart/drawing')
+          // The editor Delete key acts on the active worksheet. A preceding
+          // pivot-sheet deletion can change that context even though the named
+          // chart was found through its own worksheet object.
+          if(has(sheet,'SetActive'))sheet.SetActive()
+          if(has(Api,'GetActiveSheet')){
+            var active=Api.GetActiveSheet(),activeName=safe(active,'GetName')
+            if(activeName!=null&&String(activeName)!==String(spec.sheet))return fail('operation-error','chart worksheet activation failed',{expectedSheet:spec.sheet,actualSheet:activeName})
+          }
           try{selectable.Select()}catch(err){return fail('operation-error','public chart selection failed',{detail:String(err&&err.message?err.message:err)})}
-          return {ok:true,outcome:'editor-delete-key-required',source:'live-coedit-editor',operation:spec.type,sheet:spec.sheet,deleted:deleted,deleteVia:'public-select+editor-delete-key',beforeCount:charts.length,targetName:spec.name==null?null:String(spec.name),verification:{status:'PENDING',reason:'public ApiDrawing.Select succeeded; editor Delete key and public readback are required'}}
+          return {ok:true,outcome:'editor-delete-key-required',source:'live-coedit-editor',operation:spec.type,sheet:spec.sheet,deleted:deleted,deleteVia:'public-activate+select+editor-delete-key',beforeCount:charts.length,targetName:spec.name==null?null:String(spec.name),verification:{status:'PENDING',reason:'public worksheet activation and ApiDrawing.Select succeeded; editor Delete key and public readback are required'}}
         }
       }
       deleteTarget.Delete(); var remaining=chartsOf(sheet)

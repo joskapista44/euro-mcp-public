@@ -3,7 +3,7 @@ const assert=require('assert')
 const {chartCommand,runChartInFrame}=require('./live-charts.cjs')
 
 function makeApi(opts={}){
-  const charts=[]
+  const charts=[];let activeName=opts.activeName||'Sheet1'
   function mk(type,w,h){
     let name='Chart '+(charts.length+1),title=null,selected=false
     const c={
@@ -15,8 +15,8 @@ function makeApi(opts={}){
     if(opts.directDelete!==false)c.Delete=function(){const i=charts.indexOf(this);if(i>=0)charts.splice(i,1);return true}
     return c
   }
-  const sheet={GetAllCharts:()=>charts.slice(),GetAllDrawings:()=>charts.slice(),AddChart:(range,inRows,type,style,w,h)=>{const c=mk(type,w,h);charts.push(c);return c}}
-  return {api:{GetSheet:n=>n==='Sheet1'?sheet:null},charts}
+  const sheet={GetName:()=> 'Sheet1',SetActive:()=>{activeName='Sheet1';return true},GetAllCharts:()=>charts.slice(),GetAllDrawings:()=>charts.slice(),AddChart:(range,inRows,type,style,w,h)=>{const c=mk(type,w,h);charts.push(c);return c}}
+  return {api:{GetSheet:n=>n==='Sheet1'?sheet:null,GetActiveSheet:()=>activeName==='Sheet1'?sheet:{GetName:()=>activeName}},charts,activeName:()=>activeName}
 }
 
 async function main(){
@@ -32,15 +32,16 @@ async function main(){
  }
 
  {
-  const {api,charts}=makeApi({directDelete:false}); global.Api=api
+  const {api,charts,activeName}=makeApi({directDelete:false,activeName:'PivotSheet'}); global.Api=api
   let r=chartCommand({type:'chart.create',sheet:'Sheet1',range:'A1:B3',chartType:'bar',name:'M51_SELECT_DELETE',title:'Revenue',width:3600000,height:2160000})
   assert.equal(r.verification.status,'PASS')
   r=chartCommand({type:'chart.delete',sheet:'Sheet1',name:'M51_SELECT_DELETE'})
   assert.equal(r.ok,true)
   assert.equal(r.outcome,'editor-delete-key-required')
   assert.equal(r.verification.status,'PENDING')
-  assert.equal(r.deleteVia,'public-select+editor-delete-key')
+  assert.equal(r.deleteVia,'public-activate+select+editor-delete-key')
   assert.equal(r.beforeCount,1)
+  assert.equal(activeName(),'Sheet1')
   assert.equal(charts[0]._selected(),true)
   assert.equal(charts.length,1,'selection phase must never claim or simulate deletion')
  }
@@ -63,7 +64,7 @@ async function main(){
   assert.equal(focused,true)
   assert.equal(r.ok,true)
   assert.equal(r.verification.status,'PASS')
-  assert.equal(r.deleteVia,'public-select+editor-delete-key')
+  assert.equal(r.deleteVia,'public-activate+select+editor-delete-key')
   assert.equal(r.beforeCount,1)
   assert.equal(r.afterCount,0)
   assert.equal(r.verification.nameAbsent,true)
