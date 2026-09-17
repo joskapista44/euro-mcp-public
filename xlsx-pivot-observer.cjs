@@ -16,13 +16,15 @@ function pivotObserveCommand(spec){
   for(var j=0;j<assertions.length;j++){var a=assertions[j],r=safe(function(){return p.GetData(a.items)});state.assertions.push({items:a.items,ok:r.ok,value:r.ok?scalar(r.value):null,error:r.ok?null:r.error,expected:scalar(a.expected)})}
   return state
  }
- function matchCreate(state){if(!state.measurable||!state.present||state.name!==spec.name||state.source!==normAddr(spec.sourceRange)||state.styleName!==spec.styleName||state.rowFields!==1||state.columnFields!==1||state.dataFields!==1)return false;return state.assertions.length===spec.assertions.length&&state.assertions.every(function(x){return x.ok&&x.value===x.expected})}
+ function matchIdentity(state){return !!state&&state.measurable&&state.present&&state.name===spec.name&&state.source===normAddr(spec.sourceRange)&&state.styleName===spec.styleName&&state.rowFields===1&&state.columnFields===1&&state.dataFields===1}
+ function matchCreate(state){if(!matchIdentity(state))return false;return state.assertions.length===spec.assertions.length&&state.assertions.every(function(x){return x.ok&&x.value===x.expected})}
  function deleteState(){var p=pivot(spec.name),ps=snap(p),sheet=null;try{sheet=has(Api,'GetSheet')?Api.GetSheet(spec.pivotSheet):null}catch(_){}return {pivot:ps,pivotSheetPresent:!!sheet}}
  function matchDelete(state){return state.pivot&&state.pivot.measurable&&!state.pivot.present&&state.pivotSheetPresent===false}
  try{
-  if(!spec||!['create_pivot','delete_pivot_sheet'].includes(spec.intent)||typeof spec.name!=='string')return {ok:false,outcome:'invalid-pivot-spec',source:'live-coedit-editor'}
-  var before=spec.intent==='create_pivot'?snap(pivot(spec.name)):deleteState(),satisfied=spec.intent==='create_pivot'?matchCreate(before):matchDelete(before)
-  var measurable=spec.intent==='create_pivot'?before.measurable:before.pivot.measurable
+  if(!spec||!['create_pivot','refresh_pivot','delete_pivot_sheet'].includes(spec.intent)||typeof spec.name!=='string')return {ok:false,outcome:'invalid-pivot-spec',source:'live-coedit-editor'}
+  var isPivotState=spec.intent!=='delete_pivot_sheet'
+  var before=isPivotState?snap(pivot(spec.name)):deleteState(),satisfied=isPivotState?matchCreate(before):matchDelete(before)
+  var measurable=isPivotState?before.measurable:before.pivot.measurable
   if(!measurable)return {ok:false,outcome:'pivot-state-unverifiable',source:'live-coedit-editor',state:before}
   if(!spec.apply)return {ok:true,outcome:satisfied?'pivot-already-satisfied':'pivot-observed',source:'live-coedit-editor',noOp:satisfied,state:before,verification:{measurable:true,match:satisfied}}
   if(satisfied)return {ok:true,outcome:'pivot-already-satisfied',source:'live-coedit-editor',noOp:true,state:before,verification:{measurable:true,match:true}}
@@ -34,11 +36,16 @@ function pivotObserveCommand(spec){
    var created=Api.InsertPivotNewWorksheet(source)
    if(!created||!has(created,'SetName')||!has(created,'AddFields')||!has(created,'AddDataField')||!has(created,'SetStyleName'))return {ok:false,outcome:'pivot-build-api-unavailable',source:'live-coedit-editor'}
    created.SetName(spec.name);created.AddFields({rows:spec.rowField,columns:spec.columnField});created.AddDataField(spec.dataField);created.SetStyleName(spec.styleName);if(has(created,'RefreshTable'))created.RefreshTable()
+  }else if(spec.intent==='refresh_pivot'){
+   var existing=pivot(spec.name)
+   if(!matchIdentity(before))return {ok:false,outcome:'pivot-refresh-identity-conflict',source:'live-coedit-editor',state:before}
+   if(!existing||!has(existing,'RefreshTable'))return {ok:false,outcome:'pivot-refresh-api-unavailable',source:'live-coedit-editor',state:before}
+   existing.RefreshTable()
   }else{
    if(!before.pivot.present||before.pivot.parentSheet!==spec.pivotSheet)return {ok:false,outcome:'pivot-delete-identity-conflict',source:'live-coedit-editor',state:before}
    var target=Api.GetSheet(spec.pivotSheet);if(!target||!has(target,'Delete'))return {ok:false,outcome:'pivot-sheet-delete-api-unavailable',source:'live-coedit-editor',state:before};target.Delete()
   }
-  var after=spec.intent==='create_pivot'?snap(pivot(spec.name)):deleteState(),pass=spec.intent==='create_pivot'?matchCreate(after):matchDelete(after)
+  var after=isPivotState?snap(pivot(spec.name)):deleteState(),pass=isPivotState?matchCreate(after):matchDelete(after)
   return {ok:pass,outcome:pass?'pivot-live-verified':'pivot-semantic-mismatch',source:'live-coedit-editor',noOp:false,applied:true,before:before,state:after,verification:{measurable:true,match:pass}}
  }catch(e){return {ok:false,outcome:'pivot-operation-error',source:'live-coedit-editor',error:String(e&&e.message||e)}}
 }

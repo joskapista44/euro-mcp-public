@@ -107,9 +107,10 @@ Migration proceeds one semantic family at a time. Sort, exact single-field `filt
 
 The repository already has LIVE implementations/acceptances for capabilities outside the current W0.12-style agent task vocabulary. They are not automatically agent-grade merely because their earlier Power User acceptance is green. Remaining migration candidates include:
 
-- M5 chart rename; chart set/delete plus measurable presentation, position and series state are W0.12 TRUE LIVE accepted. Chart copy is runtime-UNSUPPORTED rather than a migration candidate;
-- broader M6.4 pivot source/field identity and mutation contracts;
-- M7 protected-range ACL core.
+- M6.4 semantic pivot refresh under the existing narrow source-coordinate, field-count and sampled-`GetData` contract;
+- broader M6.4 pivot source/field identity and mutation contracts if new public identity getters become available.
+
+M7 protected-range ACL remains primitive-only and runtime-DEFERRED for W0.12 because the deployed public API has no proven protected-range address getter. Chart set/rename/delete, including measurable presentation, position and series state, are W0.12 TRUE LIVE accepted; chart copy is runtime-UNSUPPORTED rather than a migration candidate.
 
 Each candidate needs an explicit task intent contract, fresh identity/read semantics, semantic verifier, whole-task proof, persistence behavior and retry/no-op/conflict semantics before being marked agent-grade.
 
@@ -181,4 +182,10 @@ User-reported result: `XLSX BATCH MCP LIVE ACCEPTANCE: PASS`. All batch-level ch
 
 User-reported result at `0d65732`: `XLSX CHART MCP LIVE ACCEPTANCE: PASS`. Named chart creation plus fixture setup ran in one editor session with 3 writes, read-only whole-task verification and one successful save barrier; persisted retry reopened the workbook, performed 0 writes and used no barrier. Named deletion ran in one session with 1 write and a successful barrier; its persisted retry used 0 writes and no barrier. The editor-key deletion fallback now uses bounded semantic readback polling rather than a fixed post-key delay. This proves the basic name/type/title/size/series-count contract.
 
-User-reported advanced result at `2110aac`: `XLSX CHART MCP LIVE ACCEPTANCE: PASS`. The same `set_chart` task additionally proved persisted legend position, horizontal/vertical axis titles, data-label flags, chart style, exact drawing position, series name, values formula and category formula. Apply used one session with 3 task-level writes and a successful barrier; reopen retry used 0 writes and no barrier. Delete and delete retry remained 1/0 writes. Measured open/task times were 3106/1599 ms (apply), 2946/245 ms (retry), 2906/1139 ms (delete) and 2777/53 ms (delete retry). The initial advanced attempt exposed that `ApplyChartStyle` resets presentation state; mutation ordering is now style → series/position → legend/axes/labels, with static regression coverage. Chart rename is the last implementable M5.4 operation awaiting W0.12 persisted acceptance; copy/duplicate is documented runtime-UNSUPPORTED.
+User-reported advanced result at `2110aac`: `XLSX CHART MCP LIVE ACCEPTANCE: PASS`. The same `set_chart` task additionally proved persisted legend position, horizontal/vertical axis titles, data-label flags, chart style, exact drawing position, series name, values formula and category formula. Apply used one session with 3 task-level writes and a successful barrier; reopen retry used 0 writes and no barrier. Delete and delete retry remained 1/0 writes. Measured open/task times were 3106/1599 ms (apply), 2946/245 ms (retry), 2906/1139 ms (delete) and 2777/53 ms (delete retry). The initial advanced attempt exposed that `ApplyChartStyle` resets presentation state; mutation ordering is now style → series/position → legend/axes/labels, with static regression coverage.
+
+User-reported chart lifecycle result at `55dcd4c`: `XLSX CHART MCP LIVE ACCEPTANCE: PASS`. Exact named rename used one editor session, 1 verified write and one successful save barrier; persisted rename retry used 0 writes and no barrier. Measured open/task times were 2858/1142 ms for rename and 2843/68 ms for retry. Together with the set/delete gates this closes every implementable M5.4 chart operation; copy/duplicate remains documented runtime-UNSUPPORTED.
+
+### Pivot refresh MCP — STATIC PASS, TRUE LIVE pending
+
+`refresh_pivot` now uses the existing unique pivot name plus source-coordinate/style/field-count fingerprint and required public `GetData` assertions. If those assertions already match, retry is a proven no-op. Otherwise the observer rechecks unchanged live state, calls public `RefreshTable`, verifies the requested semantic totals, runs the batch-wide read-only verification, then lets the single owning session perform one save barrier. No fixed delay or second editor session is introduced. The dedicated MCP runtime gate updates one source value, refreshes to a new asserted total, retries at 0 writes, and removes the generated pivot sheet.

@@ -3,7 +3,7 @@ const {parseA1Range}=require('./range-reader.cjs')
 const NAME=/^[A-Za-z_][A-Za-z0-9_.]*$/
 function planTask(task){
  const op=task?.operations?.length===1?task.operations[0]:null
- if(!op||!['create_pivot','delete_pivot_sheet'].includes(op.intent))return {ok:false,outcome:'xlsx-pivot-task-single-operation-required',authority:'PLAN_ONLY',writeAllowed:false}
+ if(!op||!['create_pivot','refresh_pivot','delete_pivot_sheet'].includes(op.intent))return {ok:false,outcome:'xlsx-pivot-task-single-operation-required',authority:'PLAN_ONLY',writeAllowed:false}
  if(typeof op.name!=='string'||!NAME.test(op.name))return {ok:false,outcome:'xlsx-pivot-task-invalid-name',authority:'PLAN_ONLY',writeAllowed:false}
  if(op.intent==='delete_pivot_sheet'){
   if(typeof op.pivotSheet!=='string'||!op.pivotSheet.trim())return {ok:false,outcome:'xlsx-pivot-task-sheet-required',authority:'PLAN_ONLY',writeAllowed:false}
@@ -22,12 +22,12 @@ function measured(r){return r?.ok===true&&r?.source==='live-coedit-editor'&&r?.v
 async function executePivotTask({task,api}){
  const plan=planTask(task);if(!plan.ok)return plan
  const op=plan.operation,initial=await api.inspect()
- if(!initial?.ok||initial.authority!=='LIVE_READ'||(op.intent==='create_pivot'&&!identity(initial,op.sourceSheet)))return {ok:false,outcome:'xlsx-pivot-task-initial-identity-failed',authority:'PLAN_ONLY',writeAllowed:false,plan}
+ if(!initial?.ok||initial.authority!=='LIVE_READ'||(op.intent!=='delete_pivot_sheet'&&!identity(initial,op.sourceSheet)))return {ok:false,outcome:'xlsx-pivot-task-initial-identity-failed',authority:'PLAN_ONLY',writeAllowed:false,plan}
  const pre=await api.pivotObserved(op,false)
  if(!measured(pre))return {ok:false,outcome:pre?.outcome||'xlsx-pivot-task-precheck-unverifiable',authority:'LIVE_READ',writeAllowed:false,plan,pre}
  if(pre.verification.match&&pre.noOp===true)return {ok:true,outcome:'xlsx-pivot-task-already-satisfied',authority:'LIVE_VERIFY',writeAllowed:false,noOp:true,plan,receipt:[{index:0,intent:op.intent,status:'ALREADY_SATISFIED',resolvedTarget:{name:op.name,pivotSheet:op.pivotSheet},identityProof:'fresh-live-inventory+exact-pivot-semantic-readback',verification:'LIVE_VERIFY'}],wholeTaskVerification:{ok:true,authority:'LIVE_VERIFY',state:pre.state}}
  const freshInventory=await api.inspect()
- if(!freshInventory?.ok||freshInventory.authority!=='LIVE_READ'||(op.intent==='create_pivot'&&!identity(freshInventory,op.sourceSheet)))return {ok:false,outcome:'xlsx-pivot-task-fresh-boundary-failed',authority:'PLAN_ONLY',writeAllowed:false,plan}
+ if(!freshInventory?.ok||freshInventory.authority!=='LIVE_READ'||(op.intent!=='delete_pivot_sheet'&&!identity(freshInventory,op.sourceSheet)))return {ok:false,outcome:'xlsx-pivot-task-fresh-boundary-failed',authority:'PLAN_ONLY',writeAllowed:false,plan}
  const fresh=await api.pivotObserved(op,false)
  if(!measured(fresh)||JSON.stringify(fresh.state)!==JSON.stringify(pre.state))return {ok:false,outcome:'xlsx-pivot-task-state-changed-before-mutation',authority:'LIVE_READ',writeAllowed:false,plan,pre,fresh}
  const applied=await api.pivotObserved(op,true)
