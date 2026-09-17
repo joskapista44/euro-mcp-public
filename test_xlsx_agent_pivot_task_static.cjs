@@ -1,0 +1,24 @@
+'use strict'
+const assert=require('assert')
+const {pivotObserveCommand}=require('./xlsx-pivot-observer.cjs')
+const agent=require('./xlsx-agent-pivot-task.cjs')
+let failed=0
+async function check(name,fn){try{await fn();console.log('OK '+name)}catch(e){failed++;console.error('FAIL '+name+'\n'+(e?.stack||e))}}
+function fixture(){
+ const state={pivots:[],sheets:new Set(['Source']),writes:0}
+ function makePivot(source){const s={name:'Pivot1',source:source.address,parent:'PivotSheet1',rows:[],cols:[],data:[],style:'PivotStyleLight16'};const p={GetName:()=>s.name,SetName:v=>{s.name=v},GetSource:()=>({GetAddress:()=>s.source}),GetParent:()=>({GetName:()=>s.parent}),GetRowFields:()=>s.rows,GetColumnFields:()=>s.cols,GetDataFields:()=>s.data,GetStyleName:()=>s.style,AddFields:x=>{s.rows.push(x.rows);s.cols.push(x.columns)},AddDataField:x=>s.data.push(x),SetStyleName:x=>{s.style=x},GetData:items=>({'East|A':10,'West|B':20}[items.join('|')])};state.pivots.push(p);state.sheets.add(s.parent);return p}
+ const api={GetPivotByName:n=>{const p=state.pivots.find(x=>x.GetName()===n);if(!p)throw new Error('missing');return p},GetSheet:n=>state.sheets.has(n)?{GetRange:a=>({address:a}),Delete(){state.writes++;state.sheets.delete(n);state.pivots=state.pivots.filter(p=>p.GetParent().GetName()!==n)}}:null,InsertPivotNewWorksheet:source=>{state.writes++;return makePivot(source)}}
+ return {state,api}
+}
+function createSpec(extra={}){return {intent:'create_pivot',name:'EURO_P',sourceSheet:'Source',sourceRange:'A1:C5',rowField:'Region',columnField:'Style',dataField:'Price',styleName:'PivotStyleMedium2',assertions:[{items:['East','A'],expected:'10'},{items:['West','B'],expected:'20'}],...extra}}
+function withApi(f,fn){const old=global.Api;global.Api=f.api;try{return fn()}finally{if(old===undefined)delete global.Api;else global.Api=old}}
+;(async()=>{
+ await check('observer creates complete pivot and verifies GetData assertions',async()=>{const f=fixture(),r=withApi(f,()=>pivotObserveCommand({...createSpec(),apply:true}));assert.equal(r.ok,true);assert.equal(r.state.styleName,'PivotStyleMedium2');assert.equal(r.state.assertions.every(x=>x.value===x.expected),true);assert.equal(f.state.writes,1)})
+ await check('observer recognizes exact pivot no-op',async()=>{const f=fixture();withApi(f,()=>pivotObserveCommand({...createSpec(),apply:true}));const r=withApi(f,()=>pivotObserveCommand({...createSpec(),apply:false}));assert.equal(r.noOp,true)})
+ await check('observer rejects same-name semantic conflict',async()=>{const f=fixture();withApi(f,()=>pivotObserveCommand({...createSpec(),apply:true}));const r=withApi(f,()=>pivotObserveCommand({...createSpec({styleName:'PivotStyleMedium3'}),apply:true}));assert.equal(r.outcome,'pivot-name-conflict')})
+ await check('observer deletes only identity-matched pivot sheet',async()=>{const f=fixture();const made=withApi(f,()=>pivotObserveCommand({...createSpec(),apply:true}));const sheet=made.state.parentSheet;const r=withApi(f,()=>pivotObserveCommand({intent:'delete_pivot_sheet',name:'EURO_P',pivotSheet:sheet,apply:true}));assert.equal(r.ok,true);assert.equal(r.state.pivot.present,false);assert.equal(r.state.pivotSheetPresent,false)})
+ await check('observer rejects wrong pivot sheet',async()=>{const f=fixture();withApi(f,()=>pivotObserveCommand({...createSpec(),apply:true}));f.state.sheets.add('Other');const r=withApi(f,()=>pivotObserveCommand({intent:'delete_pivot_sheet',name:'EURO_P',pivotSheet:'Other',apply:true}));assert.equal(r.outcome,'pivot-delete-identity-conflict')})
+ await check('planner requires semantic assertions',async()=>{assert.equal(agent.planTask({operations:[{...createSpec(),assertions:[]}]}).ok,false)})
+ await check('executor applies then whole-verifies',async()=>{let phase=0,writes=0;const absent={ok:true,source:'live-coedit-editor',noOp:false,state:{measurable:true,present:false,name:'P'},verification:{measurable:true,match:false}},set={ok:true,source:'live-coedit-editor',noOp:true,state:{measurable:true,present:true,name:'P',parentSheet:'Pivot1'},verification:{measurable:true,match:true}};const api={inspect:async()=>({ok:true,authority:'LIVE_READ',sheets:[{name:'Source'}]}),pivotObserved:async(_op,apply)=>{if(apply){phase=1;writes++;return {...set,noOp:false,applied:true}}return phase?set:absent}};const r=await agent.executePivotTask({task:{operations:[{...createSpec(),name:'P'}]},api});assert.equal(r.ok,true);assert.equal(r.authority,'LIVE_VERIFY');assert.equal(writes,1)})
+ console.log(failed?'XLSX PIVOT STATIC: FAIL':'XLSX PIVOT STATIC: PASS');process.exitCode=failed?1:0
+})()
