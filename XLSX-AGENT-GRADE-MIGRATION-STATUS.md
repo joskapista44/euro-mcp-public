@@ -101,15 +101,14 @@ The existing M6.1 implementation remains a valid primitive-level LIVE PASS, but 
 - reapply reports before/after state without a semantic requested-final-state assertion;
 - there is no task-level whole-state verifier, change receipt, single save-completion barrier, or persisted retry contract.
 
-Migration proceeds one semantic family at a time. Sort, exact single-field `filter_range`, `clear_filter`, the durable M6.2 validation core and M6.3 defined names are now agent-grade TRUE LIVE accepted. The old direct-Playwright acceptances must not be used as agent-grade authority. M6.4 pivots are next.
+Migration proceeds one semantic family at a time. Sort, exact single-field `filter_range`, `clear_filter`, the durable M6.2 validation core and M6.3 defined names are now agent-grade TRUE LIVE accepted. The old direct-Playwright acceptances must not be used as agent-grade authority. M6.4 pivot create/delete and persisted retries have now passed the narrow acceptance below.
 
 ## Power User capabilities not yet migrated into the agent task vocabulary
 
 The repository already has LIVE implementations/acceptances for capabilities outside the current W0.12-style agent task vocabulary. They are not automatically agent-grade merely because their earlier Power User acceptance is green. Remaining migration candidates include:
 
-- the remaining M4 formatting/structure/conditional-formatting/freeze-panes work listed above;
 - M5 chart families;
-- M6.4 pivot tables;
+- broader M6.4 pivot source/field identity and mutation contracts;
 - M7 protected-range ACL core.
 
 Each candidate needs an explicit task intent contract, fresh identity/read semantics, semantic verifier, whole-task proof, persistence behavior and retry/no-op/conflict semantics before being marked agent-grade.
@@ -128,6 +127,18 @@ These remain governed by `EXCEL-POWER-USER-CAPABILITY-GAPS.md` and must not be p
 ## Next migration order
 
 1. Keep M4.5 explicitly runtime-DEFERRED unless the deployed runtime changes; the current implementable M4 agent-grade scope is TRUE LIVE accepted.
-2. Migrate M6.4 pivot tables. Keep M7 protected-range ACL primitive-only until exact protected-range address readback exists.
+2. Verify the shared cross-capability batch executor, then integrate its supported vocabulary with the MCP surface. Keep M7 protected-range ACL primitive-only until exact protected-range address readback exists.
 3. Keep charts, pivots and protected-range ACL as explicit object-identity tasks with their own verifiers rather than reducing them to callback success.
 4. Finish with a cross-capability persistent-session acceptance and update the capability gap register without converting documented runtime blockers to implementation failures.
+
+## Pivot runtime result and limits
+
+User-reported acceptance at `eabb8bc0b472ce60b690a753ae4014e1bdf85993`: `XLSX PERSISTENT PIVOT LIVE ACCEPTANCE: PASS`. Create used 3 writes including fixture setup; delete used 1 write; both persisted retries used 0 writes. Each invocation used one editor session, with a save barrier only after writes. The tested pivot had one row, column and data field, PivotStyleMedium2, and GetData assertions 10/30/20. Source worksheet names are restricted to API-safe identifiers.
+
+This proves the tested create/delete fixture, not unrestricted pivot identity: current verification measures source coordinates, field counts and sampled values, not complete source-sheet/field identity. Delete removes the identified parent worksheet; it does not prove that the sheet contains no unrelated content.
+
+## Shared persistent batch executor — STATIC PASS, LIVE pending
+
+`xlsx-persistent-batch.cjs` composes format, layout (excluding AutoFit), merge/unmerge, freeze, sort, filter, durable validation and defined-name set/delete tasks in one existing editor session. It validates every operation before dispatch, conservatively rejects multiple goals within the same family/sheet or workbook name, and performs final verification through adapters that block mutation calls. The owning persistent-session wrapper alone saves and closes. The batch is not transactional: earlier writes may already exist if a later step fails.
+
+Static acceptance covers preflight rejection, conflicting goals, zero-write retry and blocked writes during final verification. `test_xlsx_persistent_batch_live_acceptance.cjs` tests seven families together plus a separate persisted retry. Runtime acceptance is pending. This is a reusable executor, not yet an MCP tool registration; conditional formatting, pivots, charts and generic sheet setup are outside this batch vocabulary. Existing family verification limitations still apply.
