@@ -15,21 +15,25 @@ const {StdioClientTransport}=require('@modelcontextprotocol/sdk/client/stdio.js'
  try{
   await client.connect(transport)
   assert((await client.listTools()).tools.some(t=>t.name==='office_xlsx_batch'))
-  const suffix=Date.now(),source='EURO_MCP_SRC_'+suffix,sheet='EURO_MCP_'+suffix,name='EURO_MN_'+suffix,file_id=String(process.env.EURO_XLSX_PERSISTENT_FILE_ID||1231187)
+  const suffix=Date.now(),source='EURO_MCP_SRC_'+suffix,sheet='EURO_MCP_'+suffix,name='EURO_MN_'+suffix,pivot='EURO_MP_'+suffix,file_id=String(process.env.EURO_XLSX_PERSISTENT_FILE_ID||1231187)
   const args={file_id,operations:[
    {intent:'create_sheet',name:source},
-   {intent:'write_range',sheet:source,range:'A1:B2',values:[['Name','Score'],['Alpha',10]]},
+   {intent:'write_range',sheet:source,range:'A1:E5',values:[['Region','Style','Price','Flag','Scratch'],['East','A',10,'Y','remove'],['West','B',20,'N',''],['East','B',30,'Y',''],['West','A',40,'N','']]},
    {intent:'rename_sheet',sheet:source,name:sheet},
-   {intent:'format_range',sheet,range:'A1:B1',format:{bold:true,fillColor:[210,220,230]}},
-   {intent:'set_defined_name',name,refersTo:'='+sheet+'!$A$1:$B$2'}
+   {intent:'move_sheet',sheet,referenceSheet:'Sheet1',position:'before'},
+   {intent:'clear_range',sheet,range:'E2'},
+   {intent:'format_range',sheet,range:'A1:E1',format:{bold:true,fillColor:[210,220,230]}},
+   {intent:'add_conditional_format',sheet,range:'C2:C5',rule:{type:'xlCellValue',operator:'xlGreater',formula1:'10',fillColor:[255,0,0],priority:1}},
+   {intent:'set_defined_name',name,refersTo:'='+sheet+'!$A$1:$C$5'},
+   {intent:'create_pivot',name:pivot,sourceSheet:sheet,sourceRange:'A1:C5',rowField:'Region',columnField:'Style',dataField:'Price',styleName:'PivotStyleMedium2',assertions:[{items:['East','A'],expected:10},{items:['East','B'],expected:30},{items:['West','B'],expected:20}]}
   ]}
   for(let i=0;i<2;i++){
    const reply=await client.callTool({name:'office_xlsx_batch',arguments:args},undefined,{timeout:90000})
    const r=JSON.parse(reply.content.find(c=>c.type==='text').text)
    console.log(i?'MCP PERSISTED RETRY':'MCP APPLY',JSON.stringify(r.ok?{ok:r.ok,noOp:r.noOp,callerId:r.callerId,session:r.persistentSession,wholeTaskVerification:r.wholeTaskVerification}:r,null,2))
    assert.equal(reply.isError,false);assert.equal(r.ok,true);assert.equal(r.authority,'LIVE_VERIFY');assert.equal(r.noOp,i===1)
-   assert.equal(r.persistentSession.oneEditorSession,true);assert.equal(r.persistentSession.writes,i?0:5)
-   assert.equal(r.wholeTaskVerification.checks.length,5)
+   assert.equal(r.persistentSession.oneEditorSession,true);assert.equal(r.persistentSession.writes,i?0:9)
+   assert.equal(r.wholeTaskVerification.checks.length,9)
    assert.equal(r.wholeTaskVerification.readOnly,true)
    if(i)assert.equal(r.persistentSession.persistenceBarrier,null)
    else assert.equal(r.persistentSession.persistenceBarrier.ok,true)
