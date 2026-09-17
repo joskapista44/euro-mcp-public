@@ -19,12 +19,16 @@ function validationObserveCommand(spec){
   return state
  }
  function expected(){return {type:spec.validationType,alertStyle:spec.alertStyle,operator:spec.operator,formula1:normFormula(spec.formula1),formula2:normFormula(spec.formula2),ignoreBlank:spec.ignoreBlank,inCellDropdown:spec.inCellDropdown,inputMessage:spec.inputMessage,inputTitle:spec.inputTitle,showError:spec.showError,showInput:spec.showInput,errorMessage:spec.errorMessage,errorTitle:spec.errorTitle}}
- function matchesSet(state){
-  if(!state.measurable||state.address!==normAddr(spec.range)||state.absent)return false
+ function setMismatches(state){
+  var out=[]
+  if(!state.measurable)return ['unmeasurable']
+  if(state.address!==normAddr(spec.range))out.push('address')
+  if(state.absent)out.push('absent')
   var want=expected(),keys=Object.keys(want)
-  for(var i=0;i<keys.length;i++){var k=keys[i];if(state[k]!==want[k])return false}
-  return true
+  for(var i=0;i<keys.length;i++){var k=keys[i];if(state[k]!==want[k])out.push(k)}
+  return out
  }
+ function matchesSet(state){return setMismatches(state).length===0}
  function matchesClear(state){return !!state.measurable&&state.address===normAddr(spec.range)&&state.absent===true}
  try{
   if(!spec||typeof spec.sheet!=='string'||typeof spec.range!=='string'||(spec.intent!=='set_validation'&&spec.intent!=='clear_validation'))return {ok:false,outcome:'invalid-validation-spec',source:'live-coedit-editor'}
@@ -34,8 +38,9 @@ function validationObserveCommand(spec){
   if(!before.measurable)return {ok:false,outcome:'validation-state-unverifiable',source:'live-coedit-editor',state:before}
   if(before.address!==normAddr(spec.range))return {ok:false,outcome:'validation-range-identity-mismatch',source:'live-coedit-editor',state:before}
   var satisfied=spec.intent==='set_validation'?matchesSet(before):matchesClear(before)
-  if(!spec.apply)return {ok:true,outcome:satisfied?'validation-already-satisfied':'validation-observed',source:'live-coedit-editor',noOp:satisfied,state:before,verification:{measurable:true,match:satisfied}}
-  if(satisfied)return {ok:true,outcome:'validation-already-satisfied',source:'live-coedit-editor',noOp:true,state:before,verification:{measurable:true,match:true}}
+  var beforeMismatches=spec.intent==='set_validation'?setMismatches(before):(satisfied?[]:['validation-present'])
+  if(!spec.apply)return {ok:true,outcome:satisfied?'validation-already-satisfied':'validation-observed',source:'live-coedit-editor',noOp:satisfied,state:before,verification:{measurable:true,match:satisfied,mismatches:beforeMismatches}}
+  if(satisfied)return {ok:true,outcome:'validation-already-satisfied',source:'live-coedit-editor',noOp:true,state:before,verification:{measurable:true,match:true,mismatches:[]}}
   var validation=range.GetValidation()
   if(spec.intent==='clear_validation'){
    if(!has(validation,'Delete'))return {ok:false,outcome:'validation-delete-api-unavailable',source:'live-coedit-editor',state:before}
@@ -51,7 +56,8 @@ function validationObserveCommand(spec){
   var after=read(range)
   if(!after.measurable)return {ok:false,outcome:'validation-post-state-unverifiable',source:'live-coedit-editor',before:before,state:after}
   var pass=spec.intent==='set_validation'?matchesSet(after):matchesClear(after)
-  return {ok:pass,outcome:pass?'validation-live-verified':'validation-semantic-mismatch',source:'live-coedit-editor',noOp:false,applied:true,before:before,state:after,verification:{measurable:true,match:pass}}
+  var afterMismatches=spec.intent==='set_validation'?setMismatches(after):(pass?[]:['validation-present'])
+  return {ok:pass,outcome:pass?'validation-live-verified':'validation-semantic-mismatch',source:'live-coedit-editor',noOp:false,applied:true,before:before,state:after,verification:{measurable:true,match:pass,mismatches:afterMismatches}}
  }catch(e){return {ok:false,outcome:'validation-operation-error',source:'live-coedit-editor',error:String(e&&e.message||e)}}
 }
 module.exports={validationObserveCommand}
