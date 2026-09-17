@@ -70,7 +70,12 @@ function planTask(task){
   if(targets.has(target))return {ok:false,outcome:'xlsx-batch-conflicting-goals',authority:'PLAN_ONLY',index}
   targets.add(target);steps.push({index,family:family.file,operation:{...plan.operation,index}})
  }
- return {ok:true,outcome:'xlsx-batch-planned',authority:'PLAN_ONLY',steps}
+ // Freeze panes are worksheet-view state in the deployed runtime. Pivot/chart
+ // object work can switch the editor's sheet context after an otherwise
+ // verified freeze. Apply and verify freeze goals last so the requested view
+ // is the state persisted by the owning session.
+ const orderedSteps=[...steps.filter(s=>s.family!=='freeze'),...steps.filter(s=>s.family==='freeze')]
+ return {ok:true,outcome:'xlsx-batch-planned',authority:'PLAN_ONLY',steps:orderedSteps}
 }
 function coreAdapter(api,readOnly){
  const blocked=async()=>({ok:false,outcome:'xlsx-batch-verification-write-blocked',authority:'PLAN_ONLY'})

@@ -25,6 +25,8 @@ const cf=require('./xlsx-persistent-conditional-format.cjs')
  assert.equal(coreRetry.ok,true);assert.equal(coreRetry.noOp,true);assert.equal(coreWrites,2)
  const indexed=batch.planTask({operations:[...coreTask.operations,{intent:'format_range',sheet:'N',range:'A1:B1',format:{bold:true}},{intent:'set_defined_name',name:'N_R',refersTo:'=N!$A$1'}]})
  assert.deepEqual(indexed.steps.map(s=>s.operations?.map(x=>x.index)||s.operation.index),[[0,1],2,3])
+ const freezeLast=batch.planTask({operations:[{intent:'freeze_panes',sheet:'S',mode:'at',range:'A2'},{intent:'format_range',sheet:'S',range:'A1:B1',format:{bold:true}},{intent:'set_defined_name',name:'S_R',refersTo:'=S!$A$1'}]})
+ assert.deepEqual(freezeLast.steps.map(s=>[s.family,s.operation.index]),[['format',1],['defined-name',2],['freeze',0]])
  const overlaid=batch.planTask({operations:[{intent:'create_sheet',name:'X'},{intent:'write_range',sheet:'X',range:'A1:B2',values:[[1,2],[3,4]]},{intent:'rename_sheet',sheet:'X',name:'Y'},{intent:'clear_range',sheet:'Y',range:'B2'}]})
  assert.equal(overlaid.ok,true);assert.equal(overlaid.steps[0].operations[1].values[1][1],4);assert.equal(overlaid.steps[0].verifyOperations[1].values[1][1],null)
  const coreAgent=require('./xlsx-agent-task.cjs'),clearAgent=require('./xlsx-agent-clear-task.cjs'),originalCoreExecute=coreAgent.executeTask,originalClearExecute=clearAgent.executeClearTask,seen=[]
