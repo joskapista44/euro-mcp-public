@@ -48,6 +48,8 @@ The following paths have direct runtime acceptance on the persistent-session bra
 - M6.1 `sort_range` agent-grade TRUE LIVE acceptance on FILE_ID 1231187 at tested HEAD `851e55c4cb33c9770533bd2ab62902e53570a041`: task invocation 1 used one editor session, performed create/write/sort as 3 verified writes, proved exact ordered keys `Alpha, Bravo, Charlie, Delta`, completed same-session whole-task verification, used one persistence barrier and closed. The separate retry used one new editor session, classified the requested ordering as already satisfied, performed 0 writes, used no barrier and closed. Static regression and LIVE acceptance both PASS.
 - M6.1 `filter_range` agent-grade TRUE LIVE acceptance on FILE_ID 1231187 at tested HEAD `3f0c900e220662f2627fd2af93eb9f3af7ca00b5`: exact `A1:C5` range, field 3, `xlOr`, criteria `A` were proven from the live model; task invocation 1 used one editor session, performed create/write/filter as 3 verified writes, completed whole-task verification, used one persistence barrier and closed. The separate retry proved the identical filter already satisfied, performed 0 writes, used no barrier and closed. Static regression and LIVE acceptance both PASS.
 - M6.1 `clear_filter` agent-grade TRUE LIVE acceptance on FILE_ID 1231187 at tested HEAD `b215220b76bcc710ce68ae8c86cbf1576d73c6b5`: task invocation 1 created and populated the fixture, applied an exact filter, then cleared its active criteria through `ShowAllData` in one editor session. Exact range `A1:C5` remained present with zero active filters, 4 verified writes used one persistence barrier, and same-session whole-task verification passed. The separate retry proved the cleared state already satisfied, performed 0 writes, used no barrier and closed. `filterMode: true` is expected because ONLYOFFICE preserves the AutoFilter controls after clearing criteria. Static regression and LIVE acceptance both PASS.
+- M6.2 `set_validation` and `clear_validation` agent-grade TRUE LIVE acceptance on FILE_ID 1231187 at tested HEAD `f519941ed67cb438e69ce30cf0907de9ca8c07c1`: the durable validation core (type, alert style, operator and formulas) passed exact public-getter readback, one-session mutation, one save barrier and persisted zero-write retry. Clear and its persisted retry also passed. The deployed runtime does not persist non-default `ignoreBlank`, input/error title or message values; those options are therefore rejected by the planner rather than silently rewritten on every open.
+- M6.3 `set_defined_name`, `rename_defined_name` and `delete_defined_name` agent-grade TRUE LIVE acceptance on FILE_ID 1231187 at tested HEAD `f519941ed67cb438e69ce30cf0907de9ca8c07c1`: each mutation used one persistent editor session, exact public `GetName`/`GetRefersTo` readback and one save barrier. Separate persisted retries for set, rename and delete each proved the final state with 0 writes and no barrier. Static regression and LIVE acceptance both PASS.
 
 ## Fail-closed hardening already covered
 
@@ -83,6 +85,10 @@ The structural four-operation contract is the measured full-span operation over 
 
 The current `format_range` TRUE LIVE PASS covers only properties for which the deployed editor provides stable semantic readback. Extended color/vertical-alignment, borders, `merge_range`, the tested M4.6 conditional-format rule surface and freeze-at-range are TRUE LIVE accepted by the integrated run. This is not a blanket acceptance of every possible formatting, conditional-formatting, freeze, or merge variant. `unmerge_range` is also TRUE LIVE accepted by its dedicated persistent-session acceptance.
 
+### Data validation
+
+The W0.12 contract deliberately covers only the validation fields proven durable across save and reopen: type, alert style, operator and formulas. On the deployed runtime, non-default `ignoreBlank`, input/error titles and messages read back correctly in-session but reopen with defaults. They are explicit planner rejections, not hidden support.
+
 ## M6.1 sort/filter migration audit (2026-09-17)
 
 The existing M6.1 implementation remains a valid primitive-level LIVE PASS, but it is not yet W0.12-style agent-grade execution:
@@ -95,7 +101,7 @@ The existing M6.1 implementation remains a valid primitive-level LIVE PASS, but 
 - reapply reports before/after state without a semantic requested-final-state assertion;
 - there is no task-level whole-state verifier, change receipt, single save-completion barrier, or persisted retry contract.
 
-Migration proceeds one semantic family at a time. Sort, exact single-field `filter_range`, and `clear_filter` are now agent-grade TRUE LIVE accepted. The old direct-Playwright acceptance must not be used as agent-grade authority. M6.2 data validation is next.
+Migration proceeds one semantic family at a time. Sort, exact single-field `filter_range`, `clear_filter`, the durable M6.2 validation core and M6.3 defined names are now agent-grade TRUE LIVE accepted. The old direct-Playwright acceptances must not be used as agent-grade authority. M6.4 pivots are next.
 
 ## Power User capabilities not yet migrated into the agent task vocabulary
 
@@ -103,9 +109,6 @@ The repository already has LIVE implementations/acceptances for capabilities out
 
 - the remaining M4 formatting/structure/conditional-formatting/freeze-panes work listed above;
 - M5 chart families;
-- M6.1 sort/filter;
-- M6.2 data validation;
-- M6.3 defined names;
 - M6.4 pivot tables;
 - M7 protected-range ACL core.
 
@@ -124,6 +127,6 @@ These remain governed by `EXCEL-POWER-USER-CAPABILITY-GAPS.md` and must not be p
 ## Next migration order
 
 1. Keep M4.5 explicitly runtime-DEFERRED unless the deployed runtime changes; the current implementable M4 agent-grade scope is TRUE LIVE accepted.
-2. Migrate sort/filter, data validation and defined names one family at a time into explicit agent-grade contracts.
+2. Migrate M6.4 pivot tables, then the implementable M7 protected-range ACL core.
 3. Keep charts, pivots and protected-range ACL as explicit object-identity tasks with their own verifiers rather than reducing them to callback success.
 4. Finish with a cross-capability persistent-session acceptance and update the capability gap register without converting documented runtime blockers to implementation failures.
