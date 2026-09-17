@@ -11,6 +11,12 @@ const definitions=[
  ['validation',['set_validation','clear_validation'],'Validation','validationObserved'],
  ['defined-name',['set_defined_name','delete_defined_name'],'DefinedName','definedNameObserved']
 ]
+const core={
+ file:'core',
+ intents:new Set(['create_sheet','write_range','copy_sheet','rename_sheet','delete_sheet']),
+ agent:require('./xlsx-agent-task.cjs'),
+ execute:'executeTask'
+}
 const families=definitions.map(([file,intents,fn,method])=>({
  file,intents,method,agent:require('./xlsx-agent-'+file+'-task.cjs'),
  transport:require('./xlsx-persistent-'+file+'.cjs'),execute:'execute'+fn+'Task'
@@ -18,7 +24,16 @@ const families=definitions.map(([file,intents,fn,method])=>({
 function planTask(task){
  if(!Array.isArray(task?.operations)||!task.operations.length||task.operations.length>100)return {ok:false,outcome:'xlsx-batch-invalid-operations',authority:'PLAN_ONLY'}
  const steps=[],targets=new Set()
+ const firstNonCore=task.operations.findIndex(op=>!core.intents.has(op?.intent))
+ const coreCount=firstNonCore<0?task.operations.length:firstNonCore
+ if(task.operations.slice(coreCount).some(op=>core.intents.has(op?.intent)))return {ok:false,outcome:'xlsx-batch-core-operations-must-come-first',authority:'PLAN_ONLY'}
+ if(coreCount){
+  const planned=core.agent.planTask({operations:task.operations.slice(0,coreCount)})
+  if(!planned.ok)return planned
+  steps.push({index:0,family:'core',operations:planned.operations})
+ }
  for(const [index,op] of task.operations.entries()){
+  if(index<coreCount)continue
   const family=families.find(f=>f.intents.includes(op?.intent))
   if(!family)return {ok:false,outcome:'xlsx-batch-unsupported-intent',authority:'PLAN_ONLY',index}
   // AutoFit needs operation-bound retry tokens; not yet composed here.
@@ -32,6 +47,17 @@ function planTask(task){
   targets.add(target);steps.push({index,family:family.file,operation:plan.operation})
  }
  return {ok:true,outcome:'xlsx-batch-planned',authority:'PLAN_ONLY',steps}
+}
+function coreAdapter(api,readOnly){
+ const blocked=async()=>({ok:false,outcome:'xlsx-batch-verification-write-blocked',authority:'PLAN_ONLY'})
+ return {
+  inspect:api.inspect,readRange:api.readRange,
+  createSheetVerified:readOnly?blocked:api.createSheetVerified,
+  writeRangeVerified:readOnly?blocked:api.writeRangeVerified,
+  copySheetVerified:readOnly?blocked:api.copySheetVerified,
+  renameSheetVerified:readOnly?blocked:api.renameSheetVerified,
+  deleteSheetVerified:readOnly?blocked:api.deleteSheetVerified
+ }
 }
 function adapter(api,family,readOnly){
  const run=async(...args)=>{
@@ -50,16 +76,19 @@ async function executeBatchTask({task,api}){
  const plan=planTask(task);if(!plan.ok)return {...plan,writeAllowed:false}
  const steps=[],checks=[]
  for(const step of plan.steps){
-  const f=families.find(f=>f.file===step.family)
-  const result=await f.agent[f.execute]({task:{operations:[step.operation]},api:adapter(api,f,false)})
-  steps.push({index:step.index,intent:step.operation.intent,result})
+  const f=step.family==='core'?core:families.find(f=>f.file===step.family)
+  const operations=step.operations||[step.operation]
+  const result=await f.agent[f.execute]({task:{operations},api:step.family==='core'?coreAdapter(api,false):adapter(api,f,false)})
+  steps.push({index:step.index,intent:step.family==='core'?'core_task':step.operation.intent,result})
   if(!result.ok||result.authority!=='LIVE_VERIFY')return {ok:false,outcome:'xlsx-batch-step-failed',authority:'LIVE_READ',writeAllowed:false,steps}
  }
  for(const step of plan.steps){
-  const f=families.find(f=>f.file===step.family)
-  const result=await f.agent[f.execute]({task:{operations:[step.operation]},api:adapter(api,f,true)})
-  checks.push({index:step.index,intent:step.operation.intent,ok:result.ok&&result.authority==='LIVE_VERIFY'&&result.noOp===true})
-  if(!checks.at(-1).ok)return {ok:false,outcome:'xlsx-batch-whole-verify-failed',authority:'PRIMITIVE_LIVE_VERIFY_ONLY',writeAllowed:false,steps,checks,failed:result}
+  const f=step.family==='core'?core:families.find(f=>f.file===step.family)
+  const operations=step.operations||[step.operation]
+  const result=await f.agent[f.execute]({task:{operations},api:step.family==='core'?coreAdapter(api,true):adapter(api,f,true)})
+  const ok=result.ok&&result.authority==='LIVE_VERIFY'&&result.noOp===true
+  for(const op of operations)checks.push({index:op.index,intent:op.intent,ok})
+  if(!ok)return {ok:false,outcome:'xlsx-batch-whole-verify-failed',authority:'PRIMITIVE_LIVE_VERIFY_ONLY',writeAllowed:false,steps,checks,failed:result}
  }
  return {ok:true,outcome:'xlsx-batch-live-verified',authority:'LIVE_VERIFY',writeAllowed:false,noOp:steps.every(s=>s.result.noOp===true),steps,wholeTaskVerification:{ok:true,authority:'LIVE_VERIFY',readOnly:true,checks}}
 }
@@ -67,4 +96,4 @@ async function executeBatchTaskInPersistentSession(options={}){
  const plan=planTask(options.task);if(!plan.ok)return {...plan,writeAllowed:false}
  return require('./xlsx-persistent-session.cjs').withPersistentXlsxSession(options,api=>executeBatchTask({task:options.task,api}))
 }
-module.exports={planTask,adapter,executeBatchTask,executeBatchTaskInPersistentSession}
+module.exports={planTask,adapter,coreAdapter,executeBatchTask,executeBatchTaskInPersistentSession}
