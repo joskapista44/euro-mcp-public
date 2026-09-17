@@ -19,13 +19,14 @@ async function firstInvocation(api,sheet){
 }
 function exactSet(r){const s=r?.wholeTaskVerification?.state;return s?.address==='B2:B5'&&s?.present===true&&s?.type==='xlValidateWholeNumber'&&s?.alertStyle==='xlValidAlertStop'&&s?.operator==='xlBetween'&&s?.formula1==='1'&&s?.formula2==='10'&&s?.ignoreBlank===false&&s?.inCellDropdown===true&&s?.inputTitle==='M6.2 input'&&s?.inputMessage==='Enter 1-10'&&s?.showInput===true&&s?.showError===true&&s?.errorTitle==='M6.2 error'&&s?.errorMessage==='Only 1-10'}
 function exactClear(r){const s=r?.wholeTaskVerification?.state;return s?.address==='B2:B5'&&s?.absent===true&&s?.present===false}
-function d(r){return {ok:r.ok,outcome:r.outcome,authority:r.authority,noOp:r.noOp,oneEditorSession:r.persistentSession?.oneEditorSession,writes:r.persistentSession?.writes,barrier:r.persistentSession?.persistenceBarrier?.ok,wholeTaskVerification:r.wholeTaskVerification,diagnostic:r.ok?undefined:{pre:r.pre,applied:r.applied,final:r.final}}}
+async function executeWithFreshPre(api,task){const la=liveApi(api),plan=validationAgent.planTask(task),retryPre=plan.ok?await la.validationObserved(plan.operation,false):null,result=await validationAgent.executeValidationTask({task,api:la});return {...result,retryPre}}
+function d(r){return {ok:r.ok,outcome:r.outcome,authority:r.authority,noOp:r.noOp,oneEditorSession:r.persistentSession?.oneEditorSession,writes:r.persistentSession?.writes,barrier:r.persistentSession?.persistenceBarrier?.ok,retryPre:r.retryPre,wholeTaskVerification:r.wholeTaskVerification,diagnostic:r.ok?undefined:{pre:r.pre,applied:r.applied,final:r.final}}}
 ;(async()=>{
  const sheet=`EURO VAL ${String(Date.now()).slice(-7)}`
  const first=await persistent.withPersistentXlsxSession(options,api=>firstInvocation(api,sheet))
  console.log('VALIDATION SET TASK 1 (ONE EDITOR SESSION)',JSON.stringify(d(first),null,2))
  assert.equal(first.ok,true);assert.equal(first.authority,'LIVE_VERIFY');assert.equal(first.noOp,false);assert.equal(exactSet(first),true);assert.equal(first.persistentSession?.oneEditorSession,true);assert.equal(first.persistentSession?.writes,3);assert.equal(first.persistentSession?.persistenceBarrier?.ok,true)
- const setRetry=await persistent.withPersistentXlsxSession(options,api=>validationAgent.executeValidationTask({task:setTask(sheet),api:liveApi(api)}))
+ const setRetry=await persistent.withPersistentXlsxSession(options,api=>executeWithFreshPre(api,setTask(sheet)))
  console.log('VALIDATION SET TASK 2 IDEMPOTENT REINVOCATION',JSON.stringify(d(setRetry),null,2))
  assert.equal(setRetry.ok,true);assert.equal(setRetry.authority,'LIVE_VERIFY');assert.equal(setRetry.noOp,true);assert.equal(exactSet(setRetry),true);assert.equal(setRetry.persistentSession?.oneEditorSession,true);assert.equal(setRetry.persistentSession?.writes,0);assert.equal(setRetry.persistentSession?.persistenceBarrier,null)
  const cleared=await persistent.withPersistentXlsxSession(options,api=>validationAgent.executeValidationTask({task:clearTask(sheet),api:liveApi(api)}))
