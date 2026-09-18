@@ -4,9 +4,10 @@ const path=require('path')
 const {Client}=require('@modelcontextprotocol/sdk/client/index.js')
 const {StdioClientTransport}=require('@modelcontextprotocol/sdk/client/stdio.js')
 const {buildShowcaseTask}=require('./xlsx-visual-showcase-contract.cjs')
+const {normalizeFormula}=require('./verification-contract.cjs')
 function scalar(cell){for(const value of [cell?.rawValue,cell?.value])if(typeof value==='number'&&Number.isFinite(value)||typeof value==='string'&&value.trim()!==''&&Number.isFinite(Number(value)))return Number(value);return null}
 function at(readback,address){for(const row of readback?.cells||[])for(const cell of row||[])if(cell?.address===address)return cell;return null}
-function formula(cell,expected){return cell?.formula===expected}
+function formula(cell,expected){return normalizeFormula(cell?.formula)===normalizeFormula(expected)}
 ;(async()=>{
  const caller=require('./coedit.cjs').detectCallerId();if(!caller.ok||caller.id!=='elliot')throw Error('allowlisted elliot required')
  const {getSecret}=require('/home/user/marveen/dist/web/vault.js'),pass=getSecret('Elliot_nc_pass','xlsx-visual-showcase-resume-live-acceptance');if(!pass)throw Error('vault credential missing')
