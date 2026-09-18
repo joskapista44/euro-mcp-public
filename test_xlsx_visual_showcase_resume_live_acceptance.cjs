@@ -11,7 +11,7 @@ function formula(cell,expected){return normalizeFormula(cell?.formula)===normali
 ;(async()=>{
  const caller=require('./coedit.cjs').detectCallerId();if(!caller.ok||caller.id!=='elliot')throw Error('allowlisted elliot required')
  const {getSecret}=require('/home/user/marveen/dist/web/vault.js'),pass=getSecret('Elliot_nc_pass','xlsx-visual-showcase-resume-live-acceptance');if(!pass)throw Error('vault credential missing')
- const runId=String(process.env.EURO_XLSX_SHOWCASE_RUN_ID||'768SVZ').toUpperCase(),task=buildShowcaseTask(runId),file_id=String(process.env.EURO_XLSX_FILE_ID||'1236770')
+ const runId=String(process.env.EURO_XLSX_SHOWCASE_RUN_ID||'768SVZ').toUpperCase(),task=buildShowcaseTask(runId),file_id=String(process.env.EURO_XLSX_FILE_ID||'1236770'),requireNoOp=process.env.EURO_XLSX_REQUIRE_NOOP==='1'
  const client=new Client({name:'xlsx-visual-showcase-resume',version:'1'})
  const transport=new StdioClientTransport({command:process.execPath,args:[path.join(__dirname,'euro-mcp-m44.cjs')],cwd:__dirname,env:{...process.env,EURO_COEDIT_NC_URL:process.env.EURO_COEDIT_NC_URL||'https://mt-server.eu',ELLIOT_NEXTCLOUD_USER:'elliot',ELLIOT_NEXTCLOUD_APP_PASSWORD:pass,EURO_PLAYWRIGHT_PATH:process.env.EURO_PLAYWRIGHT_PATH||'/home/user/marveen/node_modules/playwright'},stderr:'inherit'})
  try{
@@ -28,6 +28,7 @@ function formula(cell,expected){return normalizeFormula(cell?.formula)===normali
   assert(formula(at(dash,'B4'),`=SUM(${task.names.plan}!B4:B9)`));assert(formula(at(data,'F2'),'=D2*E2'))
   const writes=r.persistentSession.writes;assert(Number.isInteger(writes)&&writes>=0)
   if(writes===0)assert.equal(r.persistentSession.persistenceBarrier,null);else assert.equal(r.persistentSession.persistenceBarrier?.ok,true)
-  console.error('XLSX VISUAL SHOWCASE RESUME: PASS',JSON.stringify({runId,file_id,noOp:r.noOp,writes,oneEditorSession:true,barrier:writes?true:false,checks:task.expected.operationCount,readbacks:3,kpi:{totalRevenue:scalar(at(dash,'B4')),targetRevenue:scalar(at(dash,'B5')),variance:scalar(at(dash,'B6')),attainment:scalar(at(dash,'B7'))}}))
+  if(requireNoOp){assert.equal(r.noOp,true,'persisted retry must classify the complete task as no-op');assert.equal(writes,0,'persisted retry must perform zero writes');assert.equal(r.persistentSession.persistenceBarrier,null,'zero-write retry must not run a persistence barrier')}
+  console.error(requireNoOp?'XLSX VISUAL SHOWCASE ZERO-WRITE RETRY: PASS':'XLSX VISUAL SHOWCASE RESUME: PASS',JSON.stringify({runId,file_id,noOp:r.noOp,writes,oneEditorSession:true,barrier:writes?true:false,checks:task.expected.operationCount,readbacks:3,kpi:{totalRevenue:scalar(at(dash,'B4')),targetRevenue:scalar(at(dash,'B5')),variance:scalar(at(dash,'B6')),attainment:scalar(at(dash,'B7'))}}))
  }finally{await client.close()}
 })().catch(e=>{console.error(e.stack||e);process.exitCode=1})
