@@ -9,13 +9,13 @@ function makeApi(opts={}){
     const c={
       GetClassType:()=> 'chart',GetName:()=>name,SetName:v=>(name=v,true),GetChartType:()=>type,
       GetTitle:()=>title,SetTitle:v=>(title=v,true),SetLegendPos:()=>true,GetWidth:()=>w,GetHeight:()=>h,
-      GetAllSeries:()=>[{}],SetSize:(nw,nh)=>(w=nw,h=nh,true),Select:()=>{selected=true;return true},
+      GetAllSeries:()=>[{}],SetSize:(nw,nh)=>{if(opts.requireActiveForDrawingSize&&activeName!=='Sheet1')return false;w=nw;h=nh;return true},Select:()=>{selected=true;return true},
       _selected:()=>selected,_deleteSelected:()=>{if(!selected)return false;const i=charts.indexOf(c);if(i>=0)charts.splice(i,1);return i>=0}
     }
     if(opts.directDelete!==false)c.Delete=function(){const i=charts.indexOf(this);if(i>=0)charts.splice(i,1);return true}
     return c
   }
-  const sheet={GetName:()=> 'Sheet1',SetActive:()=>{activeName='Sheet1';return true},GetAllCharts:()=>charts.slice(),GetAllDrawings:()=>charts.slice(),AddChart:(range,inRows,type,style,w,h)=>{const c=mk(type,opts.ignoreAddChartSize?0:w,opts.ignoreAddChartSize?0:h);charts.push(c);return c}}
+  const sheet={GetName:()=> 'Sheet1',SetActive:()=>{activeName='Sheet1';return true},GetAllCharts:()=>charts.slice(),GetAllDrawings:()=>charts.slice(),AddChart:(range,inRows,type,style,w,h)=>{const inactive=opts.requireActiveForDrawingSize&&activeName!=='Sheet1',c=mk(type,opts.ignoreAddChartSize||inactive?0:w,opts.ignoreAddChartSize||inactive?0:h);charts.push(c);return c}}
   return {api:{GetSheet:n=>n==='Sheet1'?sheet:null,GetActiveSheet:()=>activeName==='Sheet1'?sheet:{GetName:()=>activeName}},charts,activeName:()=>activeName}
 }
 
@@ -35,6 +35,12 @@ async function main(){
   const {api}=makeApi({ignoreAddChartSize:true}); global.Api=api
   const r=chartCommand({type:'chart.create',sheet:'Sheet1',range:'A1:B3',chartType:'bar',name:'M51_ZERO_SIZE',title:'Revenue',width:3600000,height:2160000})
   assert.equal(r.ok,true); assert.equal(r.verification.status,'PASS'); assert.equal(r.actual.width,3600000); assert.equal(r.actual.height,2160000)
+ }
+
+ {
+  const f=makeApi({activeName:'PivotSheet',requireActiveForDrawingSize:true}); global.Api=f.api
+  const r=chartCommand({type:'chart.create',sheet:'Sheet1',range:'A1:B3',chartType:'bar',name:'M51_AFTER_PIVOT',title:'Revenue',width:3600000,height:2160000})
+  assert.equal(r.ok,true); assert.equal(r.verification.status,'PASS'); assert.equal(f.activeName(),'Sheet1'); assert.equal(r.actual.width,3600000); assert.equal(r.actual.height,2160000)
  }
 
  {

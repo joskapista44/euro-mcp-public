@@ -32,6 +32,11 @@ function chartCommand(spec) {
     if(spec.type==='chart.create'){
       if(!has(sheet,'AddChart'))return fail('unsupported','ApiWorksheet.AddChart is unavailable')
       if(!spec.range||!spec.chartType)return fail('invalid-operation','range and chartType are required')
+      // Drawing geometry is resolved against the active worksheet. Pivot
+      // creation can leave another sheet active; AddChart on the inactive
+      // target then creates a correctly identified but 0x0 chart.
+      if(has(sheet,'SetActive'))sheet.SetActive()
+      if(has(Api,'GetActiveSheet')){var activeSheet=Api.GetActiveSheet(),activeName=safe(activeSheet,'GetName');if(activeName!=null&&String(activeName)!==String(spec.sheet))return fail('operation-error','chart worksheet activation failed',{expectedSheet:spec.sheet,actualSheet:activeName})}
       var before=charts.length, range=String(spec.range), q=String(spec.sheet).replace(/'/g,"''"), dataRange="'"+q+"'!"+range
       var style=spec.style==null?1:Number(spec.style), width=spec.width==null?3600000:Number(spec.width), height=spec.height==null?2160000:Number(spec.height)
       var fromCol=spec.fromCol==null?5:Number(spec.fromCol), colOffset=spec.colOffset==null?0:Number(spec.colOffset), fromRow=spec.fromRow==null?0:Number(spec.fromRow), rowOffset=spec.rowOffset==null?0:Number(spec.rowOffset)
