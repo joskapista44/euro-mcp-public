@@ -21,6 +21,13 @@ const core={
  execute:'executeTask'
 }
 function clone(v){return JSON.parse(JSON.stringify(v))}
+function creationFirstCoreOperations(operations){
+ // A formula may reference another worksheet created by the same batch. The
+ // editor resolves formula identity at write time, so every requested sheet
+ // must exist before the first range write. Keep both partitions stable and
+ // retain request indices for receipts and final verification.
+ return [...operations.filter(op=>op.intent==='create_sheet'),...operations.filter(op=>op.intent!=='create_sheet')]
+}
 function coreFinalOperations(operations,tail){
  const final=clone(operations)
  for(const write of final.filter(op=>op.intent==='write_range')){
@@ -79,7 +86,8 @@ function planTask(task){
  if(coreCount){
   const planned=core.agent.planTask({operations:task.operations.slice(0,coreCount)})
   if(!planned.ok)return planned
-  steps.push({index:0,family:'core',operations:planned.operations,verifyOperations:coreFinalOperations(planned.operations,task.operations.slice(coreCount))})
+  const creationFirst=creationFirstCoreOperations(planned.operations)
+  steps.push({index:0,family:'core',operations:creationFirst,verifyOperations:coreFinalOperations(creationFirst,task.operations.slice(coreCount))})
  }
  for(const [index,op] of task.operations.entries()){
   if(index<coreCount)continue
@@ -169,4 +177,4 @@ async function executeBatchTaskInPersistentSession(options={}){
  const plan=planTask(options.task);if(!plan.ok)return {...plan,writeAllowed:false}
  return require('./xlsx-persistent-session.cjs').withPersistentXlsxSession(options,api=>executeBatchTask({task:options.task,api}))
 }
-module.exports={readbackPlan,goalTarget,planTask,coreFinalOperations,adapter,coreAdapter,executeBatchTask,executeBatchTaskInPersistentSession}
+module.exports={readbackPlan,goalTarget,planTask,creationFirstCoreOperations,coreFinalOperations,adapter,coreAdapter,executeBatchTask,executeBatchTaskInPersistentSession}

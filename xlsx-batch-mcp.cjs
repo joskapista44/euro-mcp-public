@@ -60,7 +60,7 @@ function register(server,deps){
   'Read/edit/read, read-only whole-task verification, then one save barrier and close. '+
   'Optional readbacks return selected final ranges from that SAME session after whole-task verification. '+
   'Submit all compatible final-state goals together; exact duplicate targets conflict, while independent ranges and named charts may share a worksheet. Not transactional. '+
-  'Core sheet/write operations must precede enhanced operations. No AutoFit. '+
+  'Core sheet/write operations must precede enhanced operations; all create_sheet operations are executed before write_range so same-batch cross-sheet formulas resolve. No AutoFit. '+
   'Examples: {intent:"format_range",sheet:"Sheet1",range:"A1:B2",format:{bold:true}}; '+
   '{intent:"set_defined_name",name:"ReportRange",refersTo:"=Sheet1!$A$1:$B$2"}.',input,makeHandler(deps))
 }

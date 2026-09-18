@@ -24,6 +24,16 @@ const cf=require('./xlsx-persistent-conditional-format.cjs')
  const invalid=await batch.executeBatchTask({task:{operations:[op,{intent:'unknown'}]},api:{inspect(){reads++}}})
  assert.equal(invalid.ok,false);assert.equal(reads,0)
  assert.equal(batch.planTask({operations:[op,{intent:'create_sheet',name:'N'}]}).outcome,'xlsx-batch-core-operations-must-come-first')
+ const crossSheet=batch.planTask({operations:[
+  {intent:'create_sheet',name:'Dash'},
+  {intent:'write_range',sheet:'Dash',range:'B4',values:[[null]],formulas:[['=SUM(Plan!B4:B9)']]},
+  {intent:'create_sheet',name:'Plan'},
+  {intent:'write_range',sheet:'Plan',range:'B4',values:[[1]]},
+  {intent:'create_sheet',name:'Data'},
+  {intent:'write_range',sheet:'Data',range:'A1',values:[[1]]}
+ ]})
+ assert.equal(crossSheet.ok,true)
+ assert.deepEqual(crossSheet.steps[0].operations.map(x=>[x.index,x.intent]),[[0,'create_sheet'],[2,'create_sheet'],[4,'create_sheet'],[1,'write_range'],[3,'write_range'],[5,'write_range']])
  const coreTask={operations:[{intent:'create_sheet',name:'N'},{intent:'write_range',sheet:'N',range:'A1:B1',values:[['x',1]]}]}
  const sheets=new Set(['S']);let coreWrites=0,matrix=null
  const coreApi={
@@ -86,5 +96,5 @@ const cf=require('./xlsx-persistent-conditional-format.cjs')
   const failed=await batch.executeBatchTask({task:{operations:[op]},api})
   assert.equal(failed.outcome,'xlsx-batch-whole-verify-failed');assert.equal(applyCalls,1)
  }finally{sort.runCommand=original}
- console.log('XLSX BATCH STATIC: PASS (preflight, core create/write, conflicts, retry, read-only final verification)')
+ console.log('XLSX BATCH STATIC: PASS (preflight, creation-first cross-sheet formulas, core create/write, conflicts, retry, read-only final verification)')
 })().catch(e=>{console.error(e);process.exitCode=1})

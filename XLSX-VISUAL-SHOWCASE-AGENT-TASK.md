@@ -26,7 +26,7 @@ If `file_id` is missing, ask only for that value. Before calling the tool, tell 
 - Make exactly one mutating MCP call: one `office_xlsx_batch` request containing the complete final-state plan.
 - Do not invoke Chrome, Playwright, DocBuilder, downloaded-XLSX or OOXML tooling yourself.
 - Do not use standalone write primitives and do not split construction into multiple MCP calls.
-- Put all `create_sheet` and `write_range` operations first. All remaining operations follow them.
+- Begin with exactly the three `create_sheet` operations (dashboard, plan, data). Only after all three sheets exist, put the three corresponding `write_range` operations. All remaining operations follow them. Do not interleave sheet creation and range writing: dashboard and plan formulas reference sheets created later in the request.
 - Do not alter or delete any pre-existing worksheet or object. Only use the run-specific names above.
 - Leave the finished workbook in place. Do not clean it up.
 - Include these same-session final readbacks in the batch request:
@@ -157,4 +157,3 @@ Treat the task as successful only if the single MCP response proves all of the f
 - Report the pivot assertion values and the two verified chart identities from the MCP result.
 
 If any evidence is missing or mismatched, fail closed and show the relevant diagnostic. Do not claim completion from callback success alone.
-
