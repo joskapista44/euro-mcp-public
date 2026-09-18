@@ -12,6 +12,8 @@ function chartSemanticStateCommand(spec){
  function seriesName(v){if(typeof v!=='string')return v;if(v.slice(0,2)==='="'&&v.slice(-1)==='"')return v.slice(2,-1).replace(/""/g,'"');return v}
  try{
   var sh=has(Api,'GetSheet')?Api.GetSheet(spec.sheet):null;if(!sh||!has(sh,'GetAllCharts'))return {ok:false,outcome:'chart-state-unverifiable',source:'live-coedit-editor'}
+  if(has(sh,'SetActive'))sh.SetActive()
+  if(has(Api,'GetActiveSheet')){var active=Api.GetActiveSheet(),activeName=safe(active,'GetName');if(activeName!=null&&String(activeName)!==String(spec.sheet))return {ok:false,outcome:'chart-sheet-activation-failed',source:'live-coedit-editor',expectedSheet:spec.sheet,actualSheet:activeName}}
   var charts=sh.GetAllCharts()||[],matches=[];for(var i=0;i<charts.length;i++)if(String(safe(charts[i],'GetName'))===String(spec.name))matches.push(charts[i])
   if(matches.length!==1)return {ok:true,outcome:'chart-state-read',source:'live-coedit-editor',state:{measurable:true,present:matches.length>0,count:matches.length,name:spec.name}}
   var c=matches[0],all=has(c,'GetAllSeries')?(c.GetAllSeries()||[]):null,unknown=[]

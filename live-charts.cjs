@@ -24,6 +24,10 @@ function chartCommand(spec) {
     if(!spec||typeof spec!=='object')return fail('invalid-operation','spec is required')
     if(!spec.sheet)return fail('invalid-operation','sheet is required')
     var sheet=sheetOf(spec.sheet); if(!sheet)return fail('sheet-not-found','worksheet not found',{sheet:spec.sheet})
+    // Drawing geometry getters/setters are resolved against the active sheet on
+    // this runtime, including after reopening a persisted workbook.
+    if(has(sheet,'SetActive'))sheet.SetActive()
+    if(has(Api,'GetActiveSheet')){var contextSheet=Api.GetActiveSheet(),contextName=safe(contextSheet,'GetName');if(contextName!=null&&String(contextName)!==String(spec.sheet))return fail('operation-error','chart worksheet activation failed',{expectedSheet:spec.sheet,actualSheet:contextName})}
     var charts=chartsOf(sheet); if(charts===null)return fail('unsupported','ApiWorksheet.GetAllCharts is unavailable')
     if(spec.type==='chart.inspect'){
       var inventory=[]; for(var i=0;i<charts.length;i++)inventory.push(describe(charts[i],i))

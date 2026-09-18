@@ -16,7 +16,7 @@ function makeApi(opts={}){
     return c
   }
   const sheet={GetName:()=> 'Sheet1',SetActive:()=>{activeName='Sheet1';return true},GetAllCharts:()=>charts.slice(),GetAllDrawings:()=>charts.slice(),AddChart:(range,inRows,type,style,w,h)=>{const inactive=opts.requireActiveForDrawingSize&&activeName!=='Sheet1',c=mk(type,opts.ignoreAddChartSize||inactive?0:w,opts.ignoreAddChartSize||inactive?0:h);charts.push(c);return c}}
-  return {api:{GetSheet:n=>n==='Sheet1'?sheet:null,GetActiveSheet:()=>activeName==='Sheet1'?sheet:{GetName:()=>activeName}},charts,activeName:()=>activeName}
+  return {api:{GetSheet:n=>n==='Sheet1'?sheet:null,GetActiveSheet:()=>activeName==='Sheet1'?sheet:{GetName:()=>activeName}},charts,activeName:()=>activeName,setActiveName:n=>{activeName=n}}
 }
 
 async function main(){
@@ -48,6 +48,14 @@ async function main(){
   const f=makeApi({activeName:'PivotSheet',requireActiveForDrawingSize:true}); global.Api=f.api
   const r=chartCommand({type:'chart.create',sheet:'Sheet1',range:'A1:B3',chartType:'bar',name:'M51_AFTER_PIVOT',title:'Revenue',width:3600000,height:2160000})
   assert.equal(r.ok,true); assert.equal(r.verification.status,'PASS'); assert.equal(f.activeName(),'Sheet1'); assert.equal(r.actual.width,3600000); assert.equal(r.actual.height,2160000)
+ }
+
+ {
+  const f=makeApi({requireActiveForDrawingSize:true}); global.Api=f.api
+  let r=chartCommand({type:'chart.create',sheet:'Sheet1',range:'A1:B3',chartType:'bar',name:'M51_REOPENED',title:'Revenue',width:3600000,height:2160000})
+  assert.equal(r.verification.status,'PASS');f.setActiveName('PivotSheet')
+  r=chartCommand({type:'chart.modify',sheet:'Sheet1',name:'M51_REOPENED',title:'Revenue',width:4000000,height:2400000})
+  assert.equal(r.verification.status,'PASS');assert.equal(f.activeName(),'Sheet1');assert.equal(r.actual.width,4000000);assert.equal(r.actual.height,2400000)
  }
 
  {
