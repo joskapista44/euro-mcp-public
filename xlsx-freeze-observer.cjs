@@ -8,6 +8,14 @@ function freezeObserveCommand(sheetName,operation,apply){
     if(!has(Api,'GetSheet'))return fail('unsupported','Api.GetSheet is unavailable')
     var sheet=Api.GetSheet(sheetName)
     if(!sheet||!has(sheet,'GetFreezePanes'))return fail('sheet-or-freeze-api-unavailable','worksheet/freeze panes API unavailable')
+    // The deployed co-editing runtime resolves freeze panes through the active
+    // worksheet view even when GetFreezePanes is called on another sheet
+    // object. Select and prove the requested public worksheet before reading;
+    // this is a UI context change, not a workbook-content mutation.
+    if(!has(sheet,'SetActive')||!has(Api,'GetActiveSheet'))return fail('freeze-sheet-activation-unavailable','worksheet activation/readback API unavailable')
+    sheet.SetActive()
+    var active=Api.GetActiveSheet(),activeName=active&&has(active,'GetName')?String(active.GetName()):null
+    if(activeName!==String(sheetName))return fail('freeze-sheet-activation-failed','active worksheet identity mismatch',{expectedSheet:sheetName,actualSheet:activeName})
     var fp=sheet.GetFreezePanes()
     if(!fp||!has(fp,'GetLocation'))return fail('freeze-readback-unavailable','ApiFreezePanes.GetLocation is unavailable')
     var expected=null,targetRange=null
