@@ -28,6 +28,10 @@ function formula(cell,expected){return normalizeFormula(cell?.formula)===normali
   assert(formula(at(dash,'B4'),`=SUM(${task.names.plan}!B4:B9)`));assert(formula(at(data,'F2'),'=D2*E2'))
   const writes=r.persistentSession.writes;assert(Number.isInteger(writes)&&writes>=0)
   if(writes===0)assert.equal(r.persistentSession.persistenceBarrier,null);else assert.equal(r.persistentSession.persistenceBarrier?.ok,true)
+  if(requireNoOp&&(r.noOp!==true||writes!==0||r.persistentSession.persistenceBarrier!==null)){
+   const nonNoOpSteps=(r.steps||[]).filter(step=>step?.result?.noOp!==true).map(step=>({index:step.index,intent:step.intent,outcome:step.result?.outcome,noOp:step.result?.noOp,operation:step.result?.plan?.operation,state:step.result?.wholeTaskVerification?.state}))
+   console.error('XLSX VISUAL SHOWCASE ZERO-WRITE RETRY DIAGNOSTIC',JSON.stringify({noOp:r.noOp,writes,persistenceBarrier:r.persistentSession.persistenceBarrier,nonNoOpSteps:{}, null,2))
+  }
   if(requireNoOp){assert.equal(r.noOp,true,'persisted retry must classify the complete task as no-op');assert.equal(writes,0,'persisted retry must perform zero writes');assert.equal(r.persistentSession.persistenceBarrier,null,'zero-write retry must not run a persistence barrier')}
   console.error(requireNoOp?'XLSX VISUAL SHOWCASE ZERO-WRITE RETRY: PASS':'XLSX VISUAL SHOWCASE RESUME: PASS',JSON.stringify({runId,file_id,noOp:r.noOp,writes,oneEditorSession:true,barrier:writes?true:false,checks:task.expected.operationCount,readbacks:3,kpi:{totalRevenue:scalar(at(dash,'B4')),targetRevenue:scalar(at(dash,'B5')),variance:scalar(at(dash,'B6')),attainment:scalar(at(dash,'B7'))}}))
  }finally{await client.close()}
