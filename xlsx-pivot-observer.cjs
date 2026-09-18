@@ -12,12 +12,15 @@ function pivotObserveCommand(spec){
   for(var i=0;i<required.length;i++)if(!has(p,required[i]))return {measurable:false,reason:'pivot-getter-unavailable',getter:required[i]}
   var src=safe(function(){return p.GetSource()}),parent=safe(function(){return p.GetParent()})
   if(!src.ok||!parent.ok||!src.value||!parent.value||!has(src.value,'GetAddress')||!has(parent.value,'GetName'))return {measurable:false,reason:'pivot-identity-unavailable'}
-  var state={measurable:true,present:true,name:p.GetName(),source:normAddr(src.value.GetAddress()),parentSheet:parent.value.GetName(),rowFields:p.GetRowFields().length,columnFields:p.GetColumnFields().length,dataFields:p.GetDataFields().length,styleName:p.GetStyleName(),assertions:[]}
+  var sourceSheet=null
+  if(has(src.value,'GetWorksheet')){var sourceParent=safe(function(){return src.value.GetWorksheet()});if(sourceParent.ok&&sourceParent.value&&has(sourceParent.value,'GetName'))sourceSheet=sourceParent.value.GetName()}
+  var state={measurable:true,present:true,name:p.GetName(),source:normAddr(src.value.GetAddress()),sourceSheet:sourceSheet,parentSheet:parent.value.GetName(),rowFields:p.GetRowFields().length,columnFields:p.GetColumnFields().length,dataFields:p.GetDataFields().length,styleName:p.GetStyleName(),assertions:[]}
   var assertions=Array.isArray(spec.assertions)?spec.assertions:[]
   for(var j=0;j<assertions.length;j++){var a=assertions[j],r=safe(function(){return p.GetData(a.items)});state.assertions.push({items:a.items,ok:r.ok,value:r.ok?scalar(r.value):null,error:r.ok?null:r.error,expected:scalar(a.expected)})}
   return state
  }
  function matchIdentity(state){return !!state&&state.measurable&&state.present&&state.name===spec.name&&state.source===normAddr(spec.sourceRange)&&(!spec.pivotSheet||state.parentSheet===spec.pivotSheet)&&state.styleName===spec.styleName&&state.rowFields===1&&state.columnFields===1&&state.dataFields===1}
+ function sameDedicatedIdentity(state){return !!state&&state.measurable&&state.present&&state.name===spec.name&&state.source===normAddr(spec.sourceRange)&&state.sourceSheet===spec.sourceSheet&&state.parentSheet===spec.pivotSheet}
  function matchCreate(state){if(!matchIdentity(state))return false;return state.assertions.length===spec.assertions.length&&state.assertions.every(function(x){return x.ok&&x.value===x.expected})}
  function deleteState(){var p=pivot(spec.name),ps=snap(p),sheet=null;try{sheet=has(Api,'GetSheet')?Api.GetSheet(spec.pivotSheet):null}catch(_){}return {pivot:ps,pivotSheetPresent:!!sheet}}
  function matchDelete(state){return state.pivot&&state.pivot.measurable&&!state.pivot.present&&state.pivotSheetPresent===false}
@@ -30,7 +33,17 @@ function pivotObserveCommand(spec){
   if(!spec.apply)return {ok:true,outcome:satisfied?'pivot-already-satisfied':'pivot-observed',source:'live-coedit-editor',noOp:satisfied,state:before,verification:{measurable:true,match:satisfied}}
   if(satisfied)return {ok:true,outcome:'pivot-already-satisfied',source:'live-coedit-editor',noOp:true,state:before,verification:{measurable:true,match:true}}
   if(spec.intent==='create_pivot'){
-   if(before.present)return {ok:false,outcome:'pivot-name-conflict',source:'live-coedit-editor',state:before}
+   if(before.present){
+    if(spec.repairIncompletePivot!==true||!spec.pivotSheet||!sameDedicatedIdentity(before))return {ok:false,outcome:'pivot-name-conflict',source:'live-coedit-editor',state:before}
+    if(!has(Api,'GetAllPivotTables')||!has(Api,'GetSheet')||!has(Api,'AddSheet'))return {ok:false,outcome:'pivot-repair-api-unavailable',source:'live-coedit-editor',state:before}
+    var all=Api.GetAllPivotTables()||[],onTarget=[]
+    for(var q=0;q<all.length;q++){var qp=safe(function(){return all[q].GetParent().GetName()});if(qp.ok&&qp.value===spec.pivotSheet)onTarget.push(all[q])}
+    if(onTarget.length!==1||!has(onTarget[0],'GetName')||onTarget[0].GetName()!==spec.name)return {ok:false,outcome:'pivot-repair-sheet-not-dedicated',source:'live-coedit-editor',state:before,pivotCount:onTarget.length}
+    var staleSheet=Api.GetSheet(spec.pivotSheet)
+    if(!staleSheet||!has(staleSheet,'Delete'))return {ok:false,outcome:'pivot-repair-sheet-delete-unavailable',source:'live-coedit-editor',state:before}
+    stage='repair-delete-dedicated-sheet';staleSheet.Delete();stage='repair-recreate-dedicated-sheet';Api.AddSheet(spec.pivotSheet)
+    if(!Api.GetSheet(spec.pivotSheet))return {ok:false,outcome:'pivot-repair-sheet-recreate-failed',source:'live-coedit-editor',state:before}
+   }
    if(!has(Api,'GetRange')||(spec.pivotSheet?!has(Api,'InsertPivotExistingWorksheet'):!has(Api,'InsertPivotNewWorksheet')))return {ok:false,outcome:'pivot-create-api-unavailable',source:'live-coedit-editor'}
    // ONLYOFFICE documents pivot creation with a workbook-qualified Api.GetRange.
    // Preserve worksheet identity in the reference instead of relying on the
@@ -46,7 +59,10 @@ function pivotObserveCommand(spec){
     stage='insert-pivot-existing';created=Api.InsertPivotExistingWorksheet(source,destination)
    }else{stage='insert-pivot-new';created=Api.InsertPivotNewWorksheet(source)}
    if(!created||!has(created,'SetName')||!has(created,'AddFields')||!has(created,'AddDataField')||!has(created,'SetStyleName'))return {ok:false,outcome:'pivot-build-api-unavailable',source:'live-coedit-editor'}
-   stage='set-name';created.SetName(spec.name);stage='add-fields';created.AddFields({rows:spec.rowField,columns:spec.columnField});stage='add-data-field';created.AddDataField(spec.dataField);stage='set-style';created.SetStyleName(spec.styleName);if(has(created,'RefreshTable')){stage='refresh';created.RefreshTable()}
+   // Follow the public AddFields example: establish the value field before
+   // moving row/column fields. Existing-sheet insertion otherwise leaves the
+   // data-field cache null in the co-editing runtime.
+   stage='set-name';created.SetName(spec.name);stage='add-data-field';created.AddDataField(spec.dataField);stage='add-fields';created.AddFields({rows:spec.rowField,columns:spec.columnField});stage='set-style';created.SetStyleName(spec.styleName);if(has(created,'RefreshTable')){stage='refresh';created.RefreshTable()}
   }else if(spec.intent==='refresh_pivot'){
    var existing=pivot(spec.name)
    if(!matchIdentity(before))return {ok:false,outcome:'pivot-refresh-identity-conflict',source:'live-coedit-editor',state:before}

@@ -19,8 +19,10 @@ function planTask(task){
  if(op.intent==='create_pivot'&&(op.pivotSheet!==undefined||op.destinationRange!==undefined)){
   const dr=parseA1Range(op.destinationRange)
   if(typeof op.pivotSheet!=='string'||!op.pivotSheet.trim()||op.pivotSheet===op.sourceSheet||!dr||dr.cellCount!==1)return {ok:false,outcome:'xlsx-pivot-task-invalid-destination',authority:'PLAN_ONLY',writeAllowed:false}
-  destination={pivotSheet:op.pivotSheet,destinationRange:dr.address}
+  if(op.repairIncompletePivot!==undefined&&op.repairIncompletePivot!==true)return {ok:false,outcome:'xlsx-pivot-task-invalid-repair-policy',authority:'PLAN_ONLY',writeAllowed:false}
+  destination={pivotSheet:op.pivotSheet,destinationRange:dr.address,...(op.repairIncompletePivot===true?{repairIncompletePivot:true}:{})}
  }
+ if(op.repairIncompletePivot!==undefined&&!destination)return {ok:false,outcome:'xlsx-pivot-task-invalid-repair-policy',authority:'PLAN_ONLY',writeAllowed:false}
  return {ok:true,outcome:'xlsx-pivot-task-planned',authority:'PLAN_ONLY',writeAllowed:true,operation:{index:0,intent:op.intent,name:op.name,sourceSheet:op.sourceSheet,sourceRange:range.address,rowField:op.rowField,columnField:op.columnField,dataField:op.dataField,styleName:op.styleName,assertions:op.assertions.map(a=>({items:a.items.map(String),expected:String(a.expected)})),...destination}}
 }
 function identity(inv,name){return (inv?.sheets||[]).filter(x=>x?.name===name).length===1}
