@@ -10,12 +10,12 @@ function cell(address, value, formula = null) {
 }
 
 // GetValue/GetValue2 may stringify a numeric cell on retry. The public
-// WorksheetFunction.TYPE result is authoritative; formatting is not evidence.
+// Single-cell reference COUNT/SUM evidence is required; formatting is not evidence.
 {
-  const currency={address:'E2',rawValue:'190',value:'190',displayText:'$190',formula:null,dataType:'number',cellTypeCode:1,numberFormat:'"$"#,##0'}
+  const currency={address:'E2',rawValue:'190',value:'190',displayText:'$190',formula:null,dataType:'number',numericReference:{source:'WorksheetFunction.COUNT/SUM(ApiRange)',count:1,sum:190},numberFormat:'"$"#,##0'}
   assert.equal(cellMatches(currency,{formula:null,value:190,blank:false}),true)
   assert.equal(cellMatches({...currency,displayText:'190',numberFormat:'General'},{formula:null,value:190,blank:false}),true)
-  assert.equal(cellMatches({...currency,dataType:'string',cellTypeCode:2,displayText:'190',numberFormat:'General'},{formula:null,value:190,blank:false}),false)
+  assert.equal(cellMatches({...currency,dataType:'string',numericReference:{source:'WorksheetFunction.COUNT/SUM(ApiRange)',count:0,sum:null},displayText:'190',numberFormat:'General'},{formula:null,value:190,blank:false}),false)
   assert.equal(cellMatches({...currency,rawValue:'191',value:'191'},{formula:null,value:190,blank:false}),false)
   assert.equal(cellMatches({...currency,formula:'=100+90',dataType:'formula'},{formula:null,value:190,blank:false}),false)
   assert.equal(cellMatches(currency,{formula:null,value:'190',blank:false}),true)

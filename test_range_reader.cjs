@@ -81,36 +81,36 @@ test('reader targets the requested non-first worksheet and returns a 2D mixed-ty
   assert.strictEqual(result.cells[1][1].dataType, 'blank')
   assert.strictEqual(result.cells[1][2].displayText, '2024-01-01')
   assert.strictEqual(result.cells[1][2].numberFormat, 'yyyy-mm-dd')
-  assert.strictEqual(result.cells[0][1].cellTypeCode, 1)
-  assert.strictEqual(result.cells[0][0].cellTypeCode, 2)
-  assert.strictEqual(typeCalls, 6)
+  assert.strictEqual(result.cells[0][1].numericReference, null)
+  assert.strictEqual(result.cells[0][0].numericReference, null)
+  assert.strictEqual(typeCalls, 0)
 })
 
-test('public worksheet TYPE preserves numeric identity when value getters stringify it', () => {
-  const numeric = {
-    GetValue() { return '120' }, GetValue2() { return '120' }, GetText() { return '120' },
-    GetFormula() { return '120' }, GetNumberFormat() { return 'General' },
+test('reference COUNT/SUM distinguishes numeric strings, text, zero, errors and formulas', () => {
+  const {cellMatches}=require('./verification-contract.cjs')
+  for(const scenario of [
+    {raw:'120',count:1,sum:120,expected:120,pass:true},
+    {raw:'190',count:1,sum:190,expected:190,format:'"$"#,##0',pass:true},
+    {raw:'120',count:0,sum:0,expected:120,pass:false},
+    {raw:'0',count:1,sum:0,expected:0,pass:true},
+    {raw:'0',count:0,sum:0,expected:0,pass:false},
+    {raw:'',count:0,sum:0,expected:0,pass:false},
+    {raw:'120',count:1,sum:121,expected:120,pass:false},
+    {raw:'120',count:1,sum:120,expected:121,pass:false},
+    {raw:'120',count:1,sum:120,expected:120,formula:'=60*2',pass:false},
+    {raw:'120',missing:true,expected:120,pass:false},
+    {raw:'120',throws:true,expected:120,pass:false},
+    {raw:'120',count:1,sum:'#VALUE!',expected:120,pass:false},
+  ]) {
+    const cell={GetValue:()=>scenario.raw,GetValue2:()=>scenario.raw,GetText:()=>scenario.raw,
+      GetFormula:()=>scenario.formula||scenario.raw,GetNumberFormat:()=>scenario.format||'General'}
+    const funcs={TYPE:()=>{throw Error('TYPE must not be called')},
+      COUNT:r=>{assert.strictEqual(r,cell);if(scenario.throws)throw Error('unavailable');return scenario.count},
+      SUM:r=>{assert.strictEqual(r,cell);return scenario.sum}}
+    const result=withApi({GetSheet:()=>({GetRange:()=>cell}),WorksheetFunction:scenario.missing?{}:funcs},
+      ()=>reader.rangeReaderCommand('Data','D2',26000))
+    assert.equal(cellMatches(result.cells[0][0],{value:scenario.expected}),scenario.pass,JSON.stringify(scenario))
   }
-  const sheet = { GetRange: () => numeric }
-  const api = { GetSheet: () => sheet, WorksheetFunction: { TYPE: () => 1 } }
-  const result = withApi(api, () => reader.rangeReaderCommand('Data', 'D2', 26000))
-  assert.strictEqual(result.ok, true)
-  assert.strictEqual(result.cells[0][0].value, '120')
-  assert.strictEqual(result.cells[0][0].dataType, 'number')
-  assert.strictEqual(result.cells[0][0].cellTypeCode, 1)
-})
-
-test('public worksheet TYPE keeps true numeric-looking text distinct', () => {
-  const text = {
-    GetValue() { return '120' }, GetValue2() { return '120' }, GetText() { return '120' },
-    GetFormula() { return '120' }, GetNumberFormat() { return 'General' },
-  }
-  const sheet = { GetRange: () => text }
-  const api = { GetSheet: () => sheet, WorksheetFunction: { TYPE: () => 2 } }
-  const result = withApi(api, () => reader.rangeReaderCommand('Data', 'D2', 26000))
-  assert.strictEqual(result.ok, true)
-  assert.strictEqual(result.cells[0][0].dataType, 'string')
-  assert.strictEqual(result.cells[0][0].cellTypeCode, 2)
 })
 
 test('single-cell scalar getters are normalized to a 2D result', () => {
@@ -141,12 +141,11 @@ test('unsupported getters are explicit null/unsupported rather than guessed', ()
   assert.strictEqual(result.cells[0][0].displayText, null)
   assert.strictEqual(result.cells[0][0].formula, null)
   assert.strictEqual(result.cells[0][0].numberFormat, null)
-  assert.strictEqual(result.cells[0][0].cellTypeCode, null)
+  assert.strictEqual(result.cells[0][0].numericReference, null)
   assert(result.unsupported.some((x) => x.field === 'GetValue2'))
   assert(result.unsupported.some((x) => x.field === 'GetText'))
   assert(result.unsupported.some((x) => x.field === 'GetFormula'))
   assert(result.unsupported.some((x) => /numberFormat$/.test(x.field)))
-  assert(result.unsupported.some((x) => x.field === 'Api.WorksheetFunction.TYPE'))
 })
 
 test('large A1:Z1000 request stays one command and is accepted at the 26k limit', () => {
