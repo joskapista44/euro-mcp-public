@@ -19,7 +19,7 @@ function formula(cell,expected){return cell?.formula===expected}
   const r=JSON.parse(reply.content.find(c=>c.type==='text').text)
   if(!r.ok){console.error('SHOWCASE RESUME FAIL',JSON.stringify({ok:r.ok,outcome:r.outcome,authority:r.authority,session:r.persistentSession,diagnostic:{stepOutcome:r.steps?.at(-1)?.result?.outcome,applied:r.steps?.at(-1)?.result?.applied,failed:r.failed,failedReadback:r.failedReadback}},null,2));assert.fail(r.outcome)}
   assert.equal(reply.isError,false);assert.equal(r.authority,'LIVE_VERIFY');assert.equal(r.persistentSession.oneEditorSession,true);assert.equal(r.persistentSession.closedByWrapper,true)
-  assert.equal(r.wholeTaskVerification.readOnly,true);assert.equal(r.wholeTaskVerification.checks.length,52);assert(r.wholeTaskVerification.checks.every(x=>x.ok))
+  assert.equal(r.wholeTaskVerification.readOnly,true);assert.equal(r.wholeTaskVerification.checks.length,53);assert(r.wholeTaskVerification.checks.every(x=>x.ok))
   const reads=r.wholeTaskVerification.readbacks;assert.equal(reads.length,3)
   const dash=reads.find(x=>x.sheet===task.names.dash),plan=reads.find(x=>x.sheet===task.names.plan),data=reads.find(x=>x.sheet===task.names.data)
   assert(dash&&plan&&data);assert.equal(scalar(at(dash,'B4')),task.expected.totalRevenue);assert.equal(scalar(at(dash,'B5')),task.expected.targetRevenue);assert.equal(scalar(at(dash,'B6')),task.expected.variance)
@@ -27,6 +27,6 @@ function formula(cell,expected){return cell?.formula===expected}
   assert(formula(at(dash,'B4'),`=SUM(${task.names.plan}!B4:B9)`));assert(formula(at(data,'F2'),'=D2*E2'))
   const writes=r.persistentSession.writes;assert(Number.isInteger(writes)&&writes>=0)
   if(writes===0)assert.equal(r.persistentSession.persistenceBarrier,null);else assert.equal(r.persistentSession.persistenceBarrier?.ok,true)
-  console.error('XLSX VISUAL SHOWCASE RESUME: PASS',JSON.stringify({runId,file_id,noOp:r.noOp,writes,oneEditorSession:true,barrier:writes?true:false,checks:52,readbacks:3,kpi:{totalRevenue:scalar(at(dash,'B4')),targetRevenue:scalar(at(dash,'B5')),variance:scalar(at(dash,'B6')),attainment:scalar(at(dash,'B7'))}}))
+  console.error('XLSX VISUAL SHOWCASE RESUME: PASS',JSON.stringify({runId,file_id,noOp:r.noOp,writes,oneEditorSession:true,barrier:writes?true:false,checks:53,readbacks:3,kpi:{totalRevenue:scalar(at(dash,'B4')),targetRevenue:scalar(at(dash,'B5')),variance:scalar(at(dash,'B6')),attainment:scalar(at(dash,'B7'))}}))
  }finally{await client.close()}
 })().catch(e=>{console.error(e.stack||e);process.exitCode=1})

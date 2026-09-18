@@ -14,19 +14,20 @@ Use the EURO-MCP `office_xlsx_batch` tool. The workbook must demonstrate that yo
   - `MCP_Dash_<run_id>`
   - `MCP_Plan_<run_id>`
   - `MCP_Data_<run_id>`
+  - `MCP_PivotView_<run_id>`
 - Derived object names:
   - defined name: `MCP_Sales_<run_id>`
   - pivot: `MCP_Pivot_<run_id>`
   - charts: `MCP_Trend_<run_id>` and `MCP_Region_<run_id>`
 
-If `file_id` is missing, ask only for that value. Before calling the tool, tell the operator the three worksheet names, ask them to open the workbook and reply `INDULHAT`, then wait. Do not use a timed delay.
+If `file_id` is missing, ask only for that value. Before calling the tool, tell the operator the four worksheet names, ask them to open the workbook and reply `INDULHAT`, then wait. Do not use a timed delay.
 
 ## Execution contract
 
 - Make exactly one mutating MCP call: one `office_xlsx_batch` request containing the complete final-state plan.
 - Do not invoke Chrome, Playwright, DocBuilder, downloaded-XLSX or OOXML tooling yourself.
 - Do not use standalone write primitives and do not split construction into multiple MCP calls.
-- Begin with exactly the three `create_sheet` operations (dashboard, plan, data). Only after all three sheets exist, put the three corresponding `write_range` operations. All remaining operations follow them. Do not interleave sheet creation and range writing: dashboard and plan formulas reference sheets created later in the request.
+- Begin with exactly the four `create_sheet` operations (dashboard, plan, data, pivot view). Only after all four sheets exist, put the three corresponding `write_range` operations. All remaining operations follow them. Do not interleave sheet creation and range writing: dashboard and plan formulas reference sheets created later in the request.
 - Do not alter or delete any pre-existing worksheet or object. Only use the run-specific names above.
 - Leave the finished workbook in place. Do not clean it up.
 - Include these same-session final readbacks in the batch request:
@@ -128,7 +129,7 @@ Add two native editable charts to the dashboard:
 
 ### 4. Pivot analysis
 
-Create the run-specific pivot from data `A1:E13` with:
+Create the run-specific pivot from data `A1:E13` on the pre-created `MCP_PivotView_<run_id>` worksheet at `A1` with:
 
 - row field `Region`
 - column field `Product`

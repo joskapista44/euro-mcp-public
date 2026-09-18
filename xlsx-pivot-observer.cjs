@@ -17,7 +17,7 @@ function pivotObserveCommand(spec){
   for(var j=0;j<assertions.length;j++){var a=assertions[j],r=safe(function(){return p.GetData(a.items)});state.assertions.push({items:a.items,ok:r.ok,value:r.ok?scalar(r.value):null,error:r.ok?null:r.error,expected:scalar(a.expected)})}
   return state
  }
- function matchIdentity(state){return !!state&&state.measurable&&state.present&&state.name===spec.name&&state.source===normAddr(spec.sourceRange)&&state.styleName===spec.styleName&&state.rowFields===1&&state.columnFields===1&&state.dataFields===1}
+ function matchIdentity(state){return !!state&&state.measurable&&state.present&&state.name===spec.name&&state.source===normAddr(spec.sourceRange)&&(!spec.pivotSheet||state.parentSheet===spec.pivotSheet)&&state.styleName===spec.styleName&&state.rowFields===1&&state.columnFields===1&&state.dataFields===1}
  function matchCreate(state){if(!matchIdentity(state))return false;return state.assertions.length===spec.assertions.length&&state.assertions.every(function(x){return x.ok&&x.value===x.expected})}
  function deleteState(){var p=pivot(spec.name),ps=snap(p),sheet=null;try{sheet=has(Api,'GetSheet')?Api.GetSheet(spec.pivotSheet):null}catch(_){}return {pivot:ps,pivotSheetPresent:!!sheet}}
  function matchDelete(state){return state.pivot&&state.pivot.measurable&&!state.pivot.present&&state.pivotSheetPresent===false}
@@ -31,14 +31,20 @@ function pivotObserveCommand(spec){
   if(satisfied)return {ok:true,outcome:'pivot-already-satisfied',source:'live-coedit-editor',noOp:true,state:before,verification:{measurable:true,match:true}}
   if(spec.intent==='create_pivot'){
    if(before.present)return {ok:false,outcome:'pivot-name-conflict',source:'live-coedit-editor',state:before}
-   if(!has(Api,'GetRange')||!has(Api,'InsertPivotNewWorksheet'))return {ok:false,outcome:'pivot-create-api-unavailable',source:'live-coedit-editor'}
+   if(!has(Api,'GetRange')||(spec.pivotSheet?!has(Api,'InsertPivotExistingWorksheet'):!has(Api,'InsertPivotNewWorksheet')))return {ok:false,outcome:'pivot-create-api-unavailable',source:'live-coedit-editor'}
    // ONLYOFFICE documents pivot creation with a workbook-qualified Api.GetRange.
    // Preserve worksheet identity in the reference instead of relying on the
    // current active sheet while InsertPivotNewWorksheet builds its cache.
    var qualified="'"+spec.sourceSheet.replace(/'/g,"''")+"'!$"+spec.sourceRange.replace(/\$/g,'').replace(':',':$').replace(/([A-Z]+)([0-9]+)/g,'$1$$$2')
    stage='resolve-qualified-source';var source=Api.GetRange(qualified)
    if(!source)return {ok:false,outcome:'pivot-source-unavailable',source:'live-coedit-editor',qualifiedSource:qualified}
-   stage='insert-pivot';var created=Api.InsertPivotNewWorksheet(source)
+   var created=null
+   if(spec.pivotSheet){
+    if(!has(Api,'GetSheet')||!has(Api,'InsertPivotExistingWorksheet'))return {ok:false,outcome:'pivot-existing-create-api-unavailable',source:'live-coedit-editor'}
+    var destinationSheet=Api.GetSheet(spec.pivotSheet),destination=destinationSheet&&has(destinationSheet,'GetRange')?destinationSheet.GetRange(spec.destinationRange):null
+    if(!destination)return {ok:false,outcome:'pivot-destination-unavailable',source:'live-coedit-editor'}
+    stage='insert-pivot-existing';created=Api.InsertPivotExistingWorksheet(source,destination)
+   }else{stage='insert-pivot-new';created=Api.InsertPivotNewWorksheet(source)}
    if(!created||!has(created,'SetName')||!has(created,'AddFields')||!has(created,'AddDataField')||!has(created,'SetStyleName'))return {ok:false,outcome:'pivot-build-api-unavailable',source:'live-coedit-editor'}
    stage='set-name';created.SetName(spec.name);stage='add-fields';created.AddFields({rows:spec.rowField,columns:spec.columnField});stage='add-data-field';created.AddDataField(spec.dataField);stage='set-style';created.SetStyleName(spec.styleName);if(has(created,'RefreshTable')){stage='refresh';created.RefreshTable()}
   }else if(spec.intent==='refresh_pivot'){
