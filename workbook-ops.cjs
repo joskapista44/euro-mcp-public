@@ -26,12 +26,7 @@ function operationCommand(op) {
     if (!op || typeof op.type !== 'string') return fail('invalid-operation', 'operation.type is required')
 
     if (op.type === 'sheet.create') {
-      if (!op.name) return fail('invalid-operation', 'name is required', { operation: op.type })
-      if (!has(Api, 'AddSheet')) return unsupported(op.type, 'Api.AddSheet is unavailable')
-      if (getSheet(op.name)) return fail('already-exists', 'worksheet already exists', { sheet: op.name })
-      Api.AddSheet(op.name)
-      if (!getSheet(op.name)) return fail('verification-failed', 'AddSheet returned without exposing the new worksheet', { sheet: op.name })
-      return { ok: true, outcome: 'ok', source: 'live-coedit-editor', operation: op.type, sheet: op.name }
+      return unsupported(op.type, 'sheet.create requires the outer spreadsheet editor API and is dispatched by runOperationInFrame')
     }
 
     if (op.type === 'sheet.rename') {
@@ -109,6 +104,101 @@ function operationCommand(op) {
   }
 }
 
+async function runNativeSheetCreateInFrame(frame, apiHely, operation, timeoutMs = 15000) {
+  return frame.evaluate(async ({ u, op, timeout }) => {
+    const e = u === 'window.editor' ? window.editor : (window.Asc || {}).editor
+    const fail = (outcome, error, extra) => Object.assign({ ok: false, outcome, source: 'live-coedit-editor', error, operation: 'sheet.create' }, extra || {})
+    if (!e || typeof e.asc_addWorksheet !== 'function') return fail('unsupported', 'spreadsheet editor asc_addWorksheet is unavailable')
+    if (!op?.name) return fail('invalid-operation', 'name is required')
+    const names = () => {
+      if (typeof e.asc_getWorksheetsCount !== 'function' || typeof e.asc_getWorksheetName !== 'function') return null
+      const count = e.asc_getWorksheetsCount(), out = []
+      if (!Number.isInteger(count)) return null
+      for (let i = 0; i < count; i++) out.push(e.asc_getWorksheetName(i))
+      return out
+    }
+    const before = names()
+    if (!before) return fail('inventory-unavailable', 'native worksheet inventory is unavailable')
+    if (before.includes(op.name)) return fail('already-exists', 'worksheet already exists', { sheet: op.name })
+    const state = {
+      canEdit: typeof e.canEdit === 'function' ? e.canEdit() : null,
+      globalLock: e.collaborativeEditing && typeof e.collaborativeEditing.getGlobalLock === 'function' ? e.collaborativeEditing.getGlobalLock() : null,
+      protectedWorkbook: typeof e.asc_isProtectedWorkbook === 'function' ? e.asc_isProtectedWorkbook() : null
+    }
+    if (state.canEdit === false || state.globalLock === true || state.protectedWorkbook === true) return fail('create-precondition-blocked', 'the editor cannot acquire the worksheet-create lock', { state })
+    const errors = []
+    const onError = (id, level) => errors.push({ id, level })
+    try { if (typeof e.asc_registerCallback === 'function') e.asc_registerCallback('asc_onError', onError) } catch (_) {}
+    try {
+      let ret
+      try { ret = e.asc_addWorksheet(op.name) }
+      catch (err) { return fail('operation-error', String(err && err.message || err), { sheet: op.name, state, errors }) }
+      if (ret === false) return fail('create-failed', 'asc_addWorksheet returned false', { sheet: op.name, state, errors })
+      const started = Date.now()
+      while (Date.now() - started <= timeout) {
+        const current = names()
+        if (current) {
+          const hits = current.filter(name => name === op.name).length
+          if (hits === 1) return { ok: true, outcome: 'ok', source: 'live-coedit-editor', operation: 'sheet.create', sheet: op.name, beforeCount: before.length, afterCount: current.length, dispatchApi: 'asc_addWorksheet', state, errors }
+          if (hits > 1) return fail('verification-failed', 'target worksheet identity became ambiguous', { sheet: op.name, targetCount: hits, state, errors })
+        }
+        await new Promise(resolve => setTimeout(resolve, 25))
+      }
+      return fail('collaboration-lock-timeout', 'asc_addWorksheet did not expose the target worksheet before the state deadline', { sheet: op.name, state, errors })
+    } finally {
+      try { if (typeof e.asc_unregisterCallback === 'function') e.asc_unregisterCallback('asc_onError', onError) } catch (_) {}
+    }
+  }, { u: apiHely, op: operation, timeout: timeoutMs })
+}
+
+async function runNativeSheetMoveInFrame(frame, apiHely, operation, timeoutMs = 15000) {
+  return frame.evaluate(async ({ u, op, timeout }) => {
+    const e = u === 'window.editor' ? window.editor : (window.Asc || {}).editor
+    const fail = (outcome, error, extra) => Object.assign({ ok: false, outcome, source: 'live-coedit-editor', error, operation: 'sheet.move' }, extra || {})
+    if (!e || typeof e.asc_moveWorksheet !== 'function') return fail('unsupported', 'spreadsheet editor asc_moveWorksheet is unavailable')
+    if (!op?.sheet || !op?.referenceSheet || !['before','after'].includes(op.position)) return fail('invalid-operation', 'sheet, referenceSheet and position=before|after are required')
+    const names = () => {
+      if (typeof e.asc_getWorksheetsCount !== 'function' || typeof e.asc_getWorksheetName !== 'function') return null
+      const count = e.asc_getWorksheetsCount(), out = []
+      if (!Number.isInteger(count)) return null
+      for (let i = 0; i < count; i++) out.push(e.asc_getWorksheetName(i))
+      return out
+    }
+    const before = names()
+    if (!before) return fail('inventory-unavailable', 'native worksheet inventory is unavailable')
+    const sourceIndex = before.indexOf(op.sheet), referenceIndex = before.indexOf(op.referenceSheet)
+    if (sourceIndex < 0 || referenceIndex < 0 || sourceIndex === referenceIndex) return fail('sheet-not-found', 'worksheet or reference worksheet was not found uniquely', { sheet: op.sheet, referenceSheet: op.referenceSheet })
+    const state = {
+      canEdit: typeof e.canEdit === 'function' ? e.canEdit() : null,
+      globalLock: e.collaborativeEditing && typeof e.collaborativeEditing.getGlobalLock === 'function' ? e.collaborativeEditing.getGlobalLock() : null,
+      protectedWorkbook: typeof e.asc_isProtectedWorkbook === 'function' ? e.asc_isProtectedWorkbook() : null
+    }
+    if (state.canEdit === false || state.globalLock === true || state.protectedWorkbook === true) return fail('move-precondition-blocked', 'the editor cannot acquire the worksheet-move lock', { state })
+    const errors = [], onError = (id, level) => errors.push({ id, level })
+    try { if (typeof e.asc_registerCallback === 'function') e.asc_registerCallback('asc_onError', onError) } catch (_) {}
+    try {
+      const where = op.position === 'before' ? referenceIndex : referenceIndex + 1
+      let ret
+      try { ret = e.asc_moveWorksheet(where, [sourceIndex]) }
+      catch (err) { return fail('operation-error', String(err && err.message || err), { sheet: op.sheet, referenceSheet: op.referenceSheet, position: op.position, state, errors }) }
+      if (ret === false) return fail('move-failed', 'asc_moveWorksheet returned false', { sheet: op.sheet, referenceSheet: op.referenceSheet, position: op.position, state, errors })
+      const started = Date.now()
+      while (Date.now() - started <= timeout) {
+        const current = names()
+        if (current) {
+          const si = current.indexOf(op.sheet), ri = current.indexOf(op.referenceSheet)
+          const matched = op.position === 'before' ? si === ri - 1 : si === ri + 1
+          if (matched) return { ok: true, outcome: 'ok', source: 'live-coedit-editor', operation: 'sheet.move', sheet: op.sheet, referenceSheet: op.referenceSheet, position: op.position, beforeIndex: sourceIndex, afterIndex: si, referenceIndex: ri, dispatchApi: 'asc_moveWorksheet', state, errors }
+        }
+        await new Promise(resolve => setTimeout(resolve, 25))
+      }
+      return fail('collaboration-lock-timeout', 'asc_moveWorksheet did not expose the requested order before the state deadline', { sheet: op.sheet, referenceSheet: op.referenceSheet, position: op.position, state, errors })
+    } finally {
+      try { if (typeof e.asc_unregisterCallback === 'function') e.asc_unregisterCallback('asc_onError', onError) } catch (_) {}
+    }
+  }, { u: apiHely, op: operation, timeout: timeoutMs })
+}
+
 async function runNativeSheetCopyInFrame(frame, apiHely, operation, timeoutMs = 15000) {
   return frame.evaluate(async ({ u, op, timeout }) => {
     const e = u === 'window.editor' ? window.editor : (window.Asc || {}).editor
@@ -150,6 +240,8 @@ async function runNativeSheetCopyInFrame(frame, apiHely, operation, timeoutMs = 
 }
 
 async function runOperationInFrame(frame, apiHely, operation, timeoutMs = 15000) {
+  if (operation?.type === 'sheet.create') return runNativeSheetCreateInFrame(frame, apiHely, operation, timeoutMs)
+  if (operation?.type === 'sheet.move') return runNativeSheetMoveInFrame(frame, apiHely, operation, timeoutMs)
   if (operation?.type === 'sheet.copy') return runNativeSheetCopyInFrame(frame, apiHely, operation, timeoutMs)
   const body = `return (${operationCommand.toString()})(${JSON.stringify(operation)});`
   return frame.evaluate(({ u, timeout, commandBody }) => new Promise((resolve) => {
@@ -192,4 +284,4 @@ async function runOperationLive({ url, user, pass, fileId, operation, loadPlaywr
   } finally { await browser.close().catch(() => {}) }
 }
 
-module.exports = { operationCommand, runNativeSheetCopyInFrame, runOperationInFrame, runOperationLive }
+module.exports = { operationCommand, runNativeSheetCreateInFrame, runNativeSheetMoveInFrame, runNativeSheetCopyInFrame, runOperationInFrame, runOperationLive }

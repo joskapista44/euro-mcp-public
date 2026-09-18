@@ -51,7 +51,10 @@ function run(op, api) {
 
 {
   const { api, sheets } = makeApi()
-  assert.equal(run({ type: 'sheet.create', name: 'Sales' }, api).ok, true)
+  const directCreate = run({ type: 'sheet.create', name: 'Sales' }, api)
+  assert.equal(directCreate.ok, false)
+  assert.equal(directCreate.outcome, 'unsupported')
+  api.AddSheet('Sales')
   assert.equal(run({ type: 'sheet.rename', sheet: 'Sales', name: 'Revenue' }, api).ok, true)
   assert.ok(sheets.has('Revenue'))
   const directCopy = run({ type: 'sheet.copy', sheet: 'Revenue', name: 'Revenue Copy' }, api)
