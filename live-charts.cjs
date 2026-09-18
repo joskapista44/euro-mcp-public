@@ -65,7 +65,11 @@ function chartCommand(spec) {
       if(spec.title!=null&&actual&&actual.title!=null&&normText(actual.title)!==normText(spec.title))mismatches.push('title')
       if(actual&&actual.width!=null&&Number(actual.width)!==width)mismatches.push('width')
       if(actual&&actual.height!=null&&Number(actual.height)!==height)mismatches.push('height')
-      if(mismatches.length)return fail('verification-failed','live chart readback mismatch',{beforeCount:before,afterCount:after.length,actual:actual,mismatches:mismatches})
+      if(mismatches.length){
+        var sizeOnly=mismatches.every(function(x){return x==='width'||x==='height'})
+        if(sizeOnly&&actual)return {ok:true,outcome:'size-pending',source:'live-coedit-editor',operation:spec.type,sheet:spec.sheet,beforeCount:before,afterCount:after.length,actual:actual,verification:{status:'PENDING',reason:'chart identity exists but geometry requires a fresh callCommand boundary',mismatches:mismatches}}
+        return fail('verification-failed','live chart readback mismatch',{beforeCount:before,afterCount:after.length,actual:actual,mismatches:mismatches})
+      }
       var unknown=[]
       if(actual.chartType==null)unknown.push('chartType'); if(spec.title!=null&&actual.title==null)unknown.push('title'); if(actual.width==null)unknown.push('width'); if(actual.height==null)unknown.push('height')
       if(unknown.length)return {ok:true,outcome:'unknown',source:'live-coedit-editor',operation:spec.type,sheet:spec.sheet,beforeCount:before,afterCount:after.length,actual:actual,verification:{status:'UNKNOWN',reason:'required live chart getters unavailable',unknown:unknown}}

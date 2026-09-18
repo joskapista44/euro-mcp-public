@@ -96,7 +96,17 @@ async function chartObserved(session,op,apply){
   command=before.title!==op.title||Number(before.width)!==op.width||Number(before.height)!==op.height?{type:'chart.modify',sheet:op.sheet,name:op.name,title:op.title,width:op.width,height:op.height}:null
  }else return {ok:false,outcome:'chart-set-identity-conflict',source:'live-coedit-editor',state:before,verification:{measurable:true,match:false}}
  let changed=null
- if(command){const runner=op.intent==='rename_chart'?runChartDataObjectInFrame:runChartInFrame;changed=await runner(session.frame,session.apiWhere,command,8000);mutations.push(changed);if(changed?.ok&&changed?.verification?.status==='PASS')mutated=true;if(!changed?.ok||changed?.verification?.status!=='PASS')return {ok:false,outcome:'chart-mutation-unverified',source:'live-coedit-editor',state:before,mutation:changed,mutationAttempted:mutated,verification:{measurable:true,match:false}}}
+ if(command){
+  const runner=op.intent==='rename_chart'?runChartDataObjectInFrame:runChartInFrame;changed=await runner(session.frame,session.apiWhere,command,8000);mutations.push(changed)
+  if(op.intent==='set_chart'&&command.type==='chart.create'&&changed?.ok&&changed?.outcome==='size-pending'&&changed?.verification?.status==='PENDING'){
+   const sizeRepair=await runChartInFrame(session.frame,session.apiWhere,{type:'chart.modify',sheet:op.sheet,name:op.name,title:op.title,width:op.width,height:op.height},8000);mutations.push(sizeRepair)
+   if(sizeRepair?.ok&&sizeRepair?.verification?.status==='PASS')mutated=true
+   else return {ok:false,outcome:'chart-mutation-unverified',source:'live-coedit-editor',state:before,mutation:sizeRepair,mutations,mutationAttempted:true,verification:{measurable:true,match:false}}
+  }else{
+   if(changed?.ok&&changed?.verification?.status==='PASS')mutated=true
+   if(!changed?.ok||changed?.verification?.status!=='PASS')return {ok:false,outcome:'chart-mutation-unverified',source:'live-coedit-editor',state:before,mutation:changed,mutationAttempted:mutated,verification:{measurable:true,match:false}}
+  }
+ }
  if(op.intent==='set_chart'){
   for(const call of advancedMutationSpecs(before,op)){const fn=call.runner==='presentation'?runChartPresentationInFrame:runChartDataObjectInFrame,r=await fn(session.frame,session.apiWhere,call.spec,8000);mutations.push(r);if(r?.ok&&r?.verification?.status==='PASS')mutated=true;else return {ok:false,outcome:'chart-mutation-unverified',source:'live-coedit-editor',state:before,mutation:r,mutations,mutationAttempted:mutated,verification:{measurable:true,match:false}}}
  }

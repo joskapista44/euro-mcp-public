@@ -38,6 +38,13 @@ async function main(){
  }
 
  {
+  const f=makeApi({ignoreAddChartSize:true}); global.Api=f.api
+  f.charts.push=(original=>function(chart){chart.SetSize=()=>false;return original.call(this,chart)})(f.charts.push)
+  const r=chartCommand({type:'chart.create',sheet:'Sheet1',range:'A1:B3',chartType:'bar',name:'M51_SIZE_PENDING',title:'Revenue',width:3600000,height:2160000})
+  assert.equal(r.ok,true); assert.equal(r.outcome,'size-pending'); assert.equal(r.verification.status,'PENDING'); assert.deepEqual(r.verification.mismatches,['width','height'])
+ }
+
+ {
   const f=makeApi({activeName:'PivotSheet',requireActiveForDrawingSize:true}); global.Api=f.api
   const r=chartCommand({type:'chart.create',sheet:'Sheet1',range:'A1:B3',chartType:'bar',name:'M51_AFTER_PIVOT',title:'Revenue',width:3600000,height:2160000})
   assert.equal(r.ok,true); assert.equal(r.verification.status,'PASS'); assert.equal(f.activeName(),'Sheet1'); assert.equal(r.actual.width,3600000); assert.equal(r.actual.height,2160000)
