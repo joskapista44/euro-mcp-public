@@ -128,21 +128,21 @@ Add two native editable charts to the dashboard:
 
 ### 4. Pivot analysis
 
-Create the run-specific pivot from data `A1:F13` with:
+Create the run-specific pivot from data `A1:E13` with:
 
 - row field `Region`
 - column field `Product`
-- data field `Revenue`
+- data field `Units`
 - style `PivotStyleMedium2`
 
 Require these semantic `GetData` assertions:
 
 | Items | Expected |
 | --- | ---: |
-| North, Core | 79125 |
-| North, Plus | 83360 |
-| South, Core | 58600 |
-| South, Plus | 66120 |
+| North, Core | 405 |
+| North, Plus | 252 |
+| South, Core | 300 |
+| South, Plus | 200 |
 
 ## Required final evidence
 
