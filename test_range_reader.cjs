@@ -41,6 +41,7 @@ test('column/address helpers cover columns beyond Z', () => {
 test('reader targets the requested non-first worksheet and returns a 2D mixed-type matrix', () => {
   let requestedSheet = null
   let bulkCalls = { GetValue: 0, GetValue2: 0, GetText: 0, GetFormula: 0 }
+  let typeCalls = 0
   const values = [['Alice', 42, 84], [true, '', 45292]]
   const raw = [['Alice', '42', '84'], ['TRUE', '', '45292']]
   const texts = [['Alice', '42', '84'], ['TRUE', '', '2024-01-01']]
@@ -55,10 +56,14 @@ test('reader targets the requested non-first worksheet and returns a 2D mixed-ty
         GetText() { bulkCalls.GetText += 1; return texts },
         GetFormula() { bulkCalls.GetFormula += 1; return formulas },
       }
-      return { GetNumberFormat() { return formats[address] ?? null } }
+      const typeCodes = { A1: 2, B1: 1, C1: 1, A2: 4, B2: 1, C2: 1 }
+      return { __typeCode: typeCodes[address], GetNumberFormat() { return formats[address] ?? null } }
     },
   }
-  const api = { GetSheet(name) { requestedSheet = name; return name === 'Second Sheet' ? sheet : null } }
+  const api = {
+    GetSheet(name) { requestedSheet = name; return name === 'Second Sheet' ? sheet : null },
+    WorksheetFunction: { TYPE(range) { typeCalls += 1; return range.__typeCode } },
+  }
   const result = withApi(api, () => reader.rangeReaderCommand('Second Sheet', 'A1:C2', 26000))
 
   assert.strictEqual(result.ok, true)
@@ -76,6 +81,36 @@ test('reader targets the requested non-first worksheet and returns a 2D mixed-ty
   assert.strictEqual(result.cells[1][1].dataType, 'blank')
   assert.strictEqual(result.cells[1][2].displayText, '2024-01-01')
   assert.strictEqual(result.cells[1][2].numberFormat, 'yyyy-mm-dd')
+  assert.strictEqual(result.cells[0][1].cellTypeCode, 1)
+  assert.strictEqual(result.cells[0][0].cellTypeCode, 2)
+  assert.strictEqual(typeCalls, 6)
+})
+
+test('public worksheet TYPE preserves numeric identity when value getters stringify it', () => {
+  const numeric = {
+    GetValue() { return '120' }, GetValue2() { return '120' }, GetText() { return '120' },
+    GetFormula() { return '120' }, GetNumberFormat() { return 'General' },
+  }
+  const sheet = { GetRange: () => numeric }
+  const api = { GetSheet: () => sheet, WorksheetFunction: { TYPE: () => 1 } }
+  const result = withApi(api, () => reader.rangeReaderCommand('Data', 'D2', 26000))
+  assert.strictEqual(result.ok, true)
+  assert.strictEqual(result.cells[0][0].value, '120')
+  assert.strictEqual(result.cells[0][0].dataType, 'number')
+  assert.strictEqual(result.cells[0][0].cellTypeCode, 1)
+})
+
+test('public worksheet TYPE keeps true numeric-looking text distinct', () => {
+  const text = {
+    GetValue() { return '120' }, GetValue2() { return '120' }, GetText() { return '120' },
+    GetFormula() { return '120' }, GetNumberFormat() { return 'General' },
+  }
+  const sheet = { GetRange: () => text }
+  const api = { GetSheet: () => sheet, WorksheetFunction: { TYPE: () => 2 } }
+  const result = withApi(api, () => reader.rangeReaderCommand('Data', 'D2', 26000))
+  assert.strictEqual(result.ok, true)
+  assert.strictEqual(result.cells[0][0].dataType, 'string')
+  assert.strictEqual(result.cells[0][0].cellTypeCode, 2)
 })
 
 test('single-cell scalar getters are normalized to a 2D result', () => {
@@ -106,10 +141,12 @@ test('unsupported getters are explicit null/unsupported rather than guessed', ()
   assert.strictEqual(result.cells[0][0].displayText, null)
   assert.strictEqual(result.cells[0][0].formula, null)
   assert.strictEqual(result.cells[0][0].numberFormat, null)
+  assert.strictEqual(result.cells[0][0].cellTypeCode, null)
   assert(result.unsupported.some((x) => x.field === 'GetValue2'))
   assert(result.unsupported.some((x) => x.field === 'GetText'))
   assert(result.unsupported.some((x) => x.field === 'GetFormula'))
   assert(result.unsupported.some((x) => /numberFormat$/.test(x.field)))
+  assert(result.unsupported.some((x) => x.field === 'Api.WorksheetFunction.TYPE'))
 })
 
 test('large A1:Z1000 request stays one command and is accepted at the 26k limit', () => {

@@ -26,7 +26,7 @@ function rangeReaderCommand(sheetName, rangeAddress, maxCells) {
   function parseRangeLocal(address){var p=String(address||'').replace(/\$/g,'').split(':');if(p.length>2)return null;var a=parseCellLocal(p[0]),b=parseCellLocal(p[1]||p[0]);if(!a||!b||b.row<a.row||b.column<a.column)return null;return {start:a,end:b,rows:b.row-a.row+1,columns:b.column-a.column+1}}
   function safe(label,fn,unsupported){try{return fn()}catch(err){unsupported.push({field:label,reason:String(err&&err.message?err.message:err)});return null}}
   function formulaText(value){return value!==null&&value!==undefined&&String(value).charAt(0)==='='?String(value):null}
-  function dataType(value,text,formula){if(formulaText(formula)!==null)return 'formula';if(value===null||value===undefined||(value===''&&(text===''||text===null||text===undefined)))return 'blank';if(typeof value==='number')return 'number';if(typeof value==='boolean')return 'boolean';if(typeof value==='string')return 'string';return 'unknown'}
+  function dataType(value,text,formula,typeCode){if(formulaText(formula)!==null)return 'formula';if(value===null||value===undefined||(value===''&&(text===''||text===null||text===undefined)))return 'blank';if(typeCode===1)return 'number';if(typeCode===2)return 'string';if(typeCode===4)return 'boolean';if(typeCode===16)return 'error';if(typeCode===64)return 'array';if(typeCode===128)return 'compound';if(typeof value==='number')return 'number';if(typeof value==='boolean')return 'boolean';if(typeof value==='string')return 'string';return 'unknown'}
   try {
     var unsupported=[]
     if(!method(Api,'GetSheet'))return {ok:false,outcome:'unsupported',source:'live-coedit-editor',error:'Api.GetSheet is unavailable'}
@@ -41,11 +41,14 @@ function rangeReaderCommand(sheetName, rangeAddress, maxCells) {
     if(!range)return {ok:false,outcome:'range-not-found',source:'live-coedit-editor',sheet:sheetName,range:rangeAddress,error:'the requested range could not be resolved'}
     function readMatrix(name){if(!method(range,name)){unsupported.push({field:name,reason:'ApiRange.'+name+' is unavailable'});return null}return asMatrix(safe(name,function(){return range[name]()},unsupported),parsed.rows,parsed.columns)}
     var values=readMatrix('GetValue'),rawValues=readMatrix('GetValue2'),texts=readMatrix('GetText'),formulas=readMatrix('GetFormula'),cells=[]
+    var worksheetFunction=Api&&Api.WorksheetFunction
+    var hasTypeFunction=!!worksheetFunction&&method(worksheetFunction,'TYPE')
+    if(!hasTypeFunction)unsupported.push({field:'Api.WorksheetFunction.TYPE',reason:'public cell-type function is unavailable'})
     for(var r=0;r<parsed.rows;r++){
       var row=[]
       for(var c=0;c<parsed.columns;c++){
         var absRow=parsed.start.row+r,absCol=parsed.start.column+c,address=colLabel(absCol)+absRow
-        var value=valueAt(values,r,c),raw=valueAt(rawValues,r,c),text=valueAt(texts,r,c),formula=valueAt(formulas,r,c),numberFormat=null
+        var value=valueAt(values,r,c),raw=valueAt(rawValues,r,c),text=valueAt(texts,r,c),formula=valueAt(formulas,r,c),numberFormat=null,cellTypeCode=null
         var single=safe('cells['+address+'].range',function(){return sheet.GetRange(address)},unsupported)
         // 9.3.4 can return GetFormula for a multi-cell range in a shape that is not
         // reliably rectangular. Formula identity is authoritative, so fall back to
@@ -53,7 +56,8 @@ function rangeReaderCommand(sheetName, rangeAddress, maxCells) {
         if(single&&method(single,'GetFormula')&&formulaText(formula)===null){var sf=safe('cells['+address+'].formula',function(){return single.GetFormula()},unsupported);if(formulaText(sf)!==null)formula=sf}
         if(single&&method(single,'GetNumberFormat'))numberFormat=safe('cells['+address+'].numberFormat',function(){return single.GetNumberFormat()},unsupported)
         else if(single)unsupported.push({field:'cells['+address+'].numberFormat',reason:'ApiRange.GetNumberFormat is unavailable'})
-        row.push({address:address,row:absRow,column:absCol,rawValue:raw,value:value,displayText:text,formula:formulaText(formula),dataType:dataType(value,text,formula),numberFormat:numberFormat})
+        if(single&&hasTypeFunction)cellTypeCode=safe('cells['+address+'].type',function(){return worksheetFunction.TYPE(single)},unsupported)
+        row.push({address:address,row:absRow,column:absCol,rawValue:raw,value:value,displayText:text,formula:formulaText(formula),dataType:dataType(value,text,formula,cellTypeCode),cellTypeCode:cellTypeCode,numberFormat:numberFormat})
       }
       cells.push(row)
     }
