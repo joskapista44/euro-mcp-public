@@ -1,5 +1,6 @@
 'use strict'
 function pivotObserveCommand(spec){
+ var stage='init'
  function has(o,n){return !!o&&typeof o[n]==='function'}
  function normAddr(v){var s=String(v==null?'':v).replace(/\$/g,'').toUpperCase(),i=s.lastIndexOf('!');return i>=0?s.slice(i+1):s}
  function safe(fn){try{return {ok:true,value:fn()}}catch(e){return {ok:false,error:String(e&&e.message||e)}}}
@@ -30,12 +31,16 @@ function pivotObserveCommand(spec){
   if(satisfied)return {ok:true,outcome:'pivot-already-satisfied',source:'live-coedit-editor',noOp:true,state:before,verification:{measurable:true,match:true}}
   if(spec.intent==='create_pivot'){
    if(before.present)return {ok:false,outcome:'pivot-name-conflict',source:'live-coedit-editor',state:before}
-   if(!has(Api,'GetSheet')||!has(Api,'InsertPivotNewWorksheet'))return {ok:false,outcome:'pivot-create-api-unavailable',source:'live-coedit-editor'}
-   var sourceSheet=Api.GetSheet(spec.sourceSheet),source=sourceSheet&&has(sourceSheet,'GetRange')?sourceSheet.GetRange(spec.sourceRange):null
-   if(!source)return {ok:false,outcome:'pivot-source-unavailable',source:'live-coedit-editor'}
-   var created=Api.InsertPivotNewWorksheet(source)
+   if(!has(Api,'GetRange')||!has(Api,'InsertPivotNewWorksheet'))return {ok:false,outcome:'pivot-create-api-unavailable',source:'live-coedit-editor'}
+   // ONLYOFFICE documents pivot creation with a workbook-qualified Api.GetRange.
+   // Preserve worksheet identity in the reference instead of relying on the
+   // current active sheet while InsertPivotNewWorksheet builds its cache.
+   var qualified="'"+spec.sourceSheet.replace(/'/g,"''")+"'!$"+spec.sourceRange.replace(/\$/g,'').replace(':',':$').replace(/([A-Z]+)([0-9]+)/g,'$1$$$2')
+   stage='resolve-qualified-source';var source=Api.GetRange(qualified)
+   if(!source)return {ok:false,outcome:'pivot-source-unavailable',source:'live-coedit-editor',qualifiedSource:qualified}
+   stage='insert-pivot';var created=Api.InsertPivotNewWorksheet(source)
    if(!created||!has(created,'SetName')||!has(created,'AddFields')||!has(created,'AddDataField')||!has(created,'SetStyleName'))return {ok:false,outcome:'pivot-build-api-unavailable',source:'live-coedit-editor'}
-   created.SetName(spec.name);created.AddFields({rows:spec.rowField,columns:spec.columnField});created.AddDataField(spec.dataField);created.SetStyleName(spec.styleName);if(has(created,'RefreshTable'))created.RefreshTable()
+   stage='set-name';created.SetName(spec.name);stage='add-fields';created.AddFields({rows:spec.rowField,columns:spec.columnField});stage='add-data-field';created.AddDataField(spec.dataField);stage='set-style';created.SetStyleName(spec.styleName);if(has(created,'RefreshTable')){stage='refresh';created.RefreshTable()}
   }else if(spec.intent==='refresh_pivot'){
    var existing=pivot(spec.name)
    if(!matchIdentity(before))return {ok:false,outcome:'pivot-refresh-identity-conflict',source:'live-coedit-editor',state:before}
@@ -47,6 +52,6 @@ function pivotObserveCommand(spec){
   }
   var after=isPivotState?snap(pivot(spec.name)):deleteState(),pass=isPivotState?matchCreate(after):matchDelete(after)
   return {ok:pass,outcome:pass?'pivot-live-verified':'pivot-semantic-mismatch',source:'live-coedit-editor',noOp:false,applied:true,before:before,state:after,verification:{measurable:true,match:pass}}
- }catch(e){return {ok:false,outcome:'pivot-operation-error',source:'live-coedit-editor',error:String(e&&e.message||e)}}
+ }catch(e){return {ok:false,outcome:'pivot-operation-error',source:'live-coedit-editor',stage:stage,error:String(e&&e.message||e)}}
 }
 module.exports={pivotObserveCommand}
