@@ -15,7 +15,7 @@ function makeApi(opts={}){
     if(opts.directDelete!==false)c.Delete=function(){const i=charts.indexOf(this);if(i>=0)charts.splice(i,1);return true}
     return c
   }
-  const sheet={GetName:()=> 'Sheet1',SetActive:()=>{activeName='Sheet1';return true},GetAllCharts:()=>charts.slice(),GetAllDrawings:()=>charts.slice(),AddChart:(range,inRows,type,style,w,h)=>{const c=mk(type,w,h);charts.push(c);return c}}
+  const sheet={GetName:()=> 'Sheet1',SetActive:()=>{activeName='Sheet1';return true},GetAllCharts:()=>charts.slice(),GetAllDrawings:()=>charts.slice(),AddChart:(range,inRows,type,style,w,h)=>{const c=mk(type,opts.ignoreAddChartSize?0:w,opts.ignoreAddChartSize?0:h);charts.push(c);return c}}
   return {api:{GetSheet:n=>n==='Sheet1'?sheet:null,GetActiveSheet:()=>activeName==='Sheet1'?sheet:{GetName:()=>activeName}},charts,activeName:()=>activeName}
 }
 
@@ -29,6 +29,12 @@ async function main(){
   assert.equal(r.verification.status,'PASS'); assert.equal(r.actual.title,'Revenue verified'); assert.equal(r.actual.width,4000000); assert.equal(r.actual.height,2400000)
   r=chartCommand({type:'chart.inspect',sheet:'Sheet1'}); assert.equal(r.count,1); assert.equal(r.charts[0].name,'M51_CHART')
   r=chartCommand({type:'chart.delete',sheet:'Sheet1',name:'M51_CHART'}); assert.equal(r.verification.status,'PASS'); assert.equal(r.afterCount,0); assert.equal(r.deleteVia,'chart')
+ }
+
+ {
+  const {api}=makeApi({ignoreAddChartSize:true}); global.Api=api
+  const r=chartCommand({type:'chart.create',sheet:'Sheet1',range:'A1:B3',chartType:'bar',name:'M51_ZERO_SIZE',title:'Revenue',width:3600000,height:2160000})
+  assert.equal(r.ok,true); assert.equal(r.verification.status,'PASS'); assert.equal(r.actual.width,3600000); assert.equal(r.actual.height,2160000)
  }
 
  {

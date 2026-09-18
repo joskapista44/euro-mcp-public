@@ -38,6 +38,13 @@ function chartCommand(spec) {
       var chart=null
       try{chart=sheet.AddChart(dataRange,!!spec.inRows,String(spec.chartType),style,width,height,fromCol,colOffset,fromRow,rowOffset)}catch(err){return fail('operation-error',String(err&&err.message?err.message:err))}
       if(!chart)return fail('operation-error','ApiWorksheet.AddChart returned null')
+      // After a preceding structural operation (notably pivot creation), the
+      // co-editing runtime can accept AddChart's size arguments but expose a
+      // 0x0 drawing. Repair that measured state through the public object API
+      // before identity readback; exact GetWidth/GetHeight verification below
+      // remains authoritative.
+      var initialWidth=safe(chart,'GetWidth'),initialHeight=safe(chart,'GetHeight')
+      if((Number(initialWidth)!==width||Number(initialHeight)!==height)&&has(chart,'SetSize'))chart.SetSize(width,height)
       if(spec.name!=null){if(!has(chart,'SetName'))return fail('unsupported','ApiChart.SetName is unavailable');chart.SetName(String(spec.name))}
       if(spec.title!=null){if(!has(chart,'SetTitle'))return fail('unsupported','ApiChart.SetTitle is unavailable');chart.SetTitle(String(spec.title),spec.titleFontSize==null?12:Number(spec.titleFontSize),spec.titleBold!==false)}
       if(spec.legendPos!=null){if(!has(chart,'SetLegendPos'))return fail('unsupported','ApiChart.SetLegendPos is unavailable');chart.SetLegendPos(String(spec.legendPos))}
