@@ -2,11 +2,21 @@
 
 const assert = require('assert')
 const fs = require('fs')
-const { LIVE_SOURCE, acceptLive, verifyEditEnvelope, verifyRangeReadback, runRangeWriteContract } = require('./verification-contract.cjs')
+const { LIVE_SOURCE, acceptLive, verifyEditEnvelope, verifyRangeReadback, runRangeWriteContract, cellMatches } = require('./verification-contract.cjs')
 
 function live(extra = {}) { return { ok: true, outcome: 'ok', source: LIVE_SOURCE, ...extra } }
 function cell(address, value, formula = null) {
   return { address, rawValue: value, value, displayText: value == null ? '' : String(value), formula, dataType: formula ? 'formula' : (value == null ? 'blank' : typeof value) }
+}
+
+// A formatted numeric cell may be stringified by the live getter on retry.
+// The visible numeric format is evidence; a General-format text cell is not.
+{
+  const currency={address:'E2',rawValue:'190',value:'190',displayText:'$190',formula:null,dataType:'string',numberFormat:'"$"#,##0'}
+  assert.equal(cellMatches(currency,{formula:null,value:190,blank:false}),true)
+  assert.equal(cellMatches({...currency,displayText:'190',numberFormat:'General'},{formula:null,value:190,blank:false}),false)
+  assert.equal(cellMatches({...currency,displayText:'190',numberFormat:'@'},{formula:null,value:190,blank:false}),false)
+  assert.equal(cellMatches(currency,{formula:null,value:'190',blank:false}),true)
 }
 
 // M1.1 inspect must prove the live co-edit source.

@@ -13,6 +13,20 @@ Transport: MCP -> Playwright -> authenticated Nextcloud spreadsheet editor -> ed
 
 ## Current gaps
 
+### Print layout / verified one-page output — DEVELOPMENT BACKLOG
+
+The current `office_xlsx_batch` surface can compose cell content, formulas, formatting, fixed row/column dimensions, merges and drawing objects, but it does not inspect rendered print pagination or expose a verified print-layout final state.
+
+Required W0.12 work:
+
+- probe public live setters and getters for print area, paper size, portrait/landscape orientation, margins, scaling and fit-to-pages width/height;
+- expose only settings whose exact post-state can be read back in the same editor session;
+- determine whether the public runtime exposes calculated page breaks or rendered page count;
+- if pagination itself is not publicly measurable, report only `fit-to-one-page settings live-verified`, never claim that the rendered output is one page;
+- add persisted retry and a cross-sheet print-layout acceptance without Chrome UI automation, fixed delay, downloaded XLSX or OOXML verification.
+
+Known legacy probes are insufficient: some setters were inert or unavailable on the deployed runtime, and setter dispatch alone is not acceptance evidence. Status: DEVELOPMENT BACKLOG / runtime re-probe required.
+
 ### M4.5 Excel Tables / ListObject — DEFERRED
 
 Fresh 9.3.4.60 acceptance confirms that FormatAsTable executes, but ApiWorksheet.AddListObject and ApiWorksheet.GetListObjects are unavailable. Genuine table identity, name and range therefore cannot be semantically verified. Do not treat FormatAsTable alone as Table/ListObject PASS.
