@@ -1,6 +1,7 @@
 'use strict'
-const {parseA1Range}=require('./range-reader.cjs')
+const {parseA1Range,columnLabel}=require('./range-reader.cjs')
 const NAME=/^[A-Za-z_][A-Za-z0-9_. -]*$/
+const DEF_NAME=/^[A-Za-z_][A-Za-z0-9_.]*$/
 function planTask(task){
  const op=task?.operations?.length===1?task.operations[0]:null
  if(!op||!['set_chart','rename_chart','delete_chart'].includes(op.intent))return {ok:false,outcome:'xlsx-chart-task-single-operation-required',authority:'PLAN_ONLY',writeAllowed:false}
@@ -29,9 +30,13 @@ function planTask(task){
   const seen=new Set()
   for(const s of series){const keys=['index','name','valuesRange','xValuesRange','categoryRange'];if(!s||typeof s!=='object'||Array.isArray(s)||Object.keys(s).some(k=>!keys.includes(k))||!Number.isInteger(s.index)||s.index<0||s.index>=op.expectedSeriesCount||seen.has(s.index)||Object.keys(s).length<2)return {ok:false,outcome:'xlsx-chart-task-invalid-series',authority:'PLAN_ONLY',writeAllowed:false};seen.add(s.index);for(const k of keys.slice(1))if(s[k]!=null&&(typeof s[k]!=='string'||!s[k]))return {ok:false,outcome:'xlsx-chart-task-invalid-series',authority:'PLAN_ONLY',writeAllowed:false,field:k}}
  }
- if(op.geometryIdentityName!=null&&(op.intent!=='set_chart'||typeof op.geometryIdentityName!=='string'||!NAME.test(op.geometryIdentityName)))return {ok:false,outcome:'xlsx-chart-task-invalid-geometry-identity',authority:'PLAN_ONLY',writeAllowed:false}
- const geometryIdentityRef=op.geometryIdentityName==null?null:`="${width}x${height}"`
- return {ok:true,outcome:'xlsx-chart-task-planned',authority:'PLAN_ONLY',writeAllowed:true,operation:{index:0,intent:op.intent,sheet:op.sheet,name:op.name,newName:op.intent==='rename_chart'?op.newName:undefined,range:range?.address,chartType:op.chartType,title:String(op.title),width,height,expectedSeriesCount:op.expectedSeriesCount,inRows:!!op.inRows,geometryIdentityName:op.geometryIdentityName||null,geometryIdentityRef,presentation:presentation?JSON.parse(JSON.stringify(presentation)):null,chartPosition:position?{fromCol:position.fromCol,colOffset:position.colOffset,fromRow:position.fromRow,rowOffset:position.rowOffset}:null,series:series?series.map(s=>({index:s.index,...(s.name==null?{}:{name:s.name}),...(s.valuesRange==null?{}:{valuesRange:s.valuesRange.replace(/^=/,'')}),...(s.xValuesRange==null?{}:{xValuesRange:s.xValuesRange.replace(/^=/,'')}),...(s.categoryRange==null?{}:{categoryRange:s.categoryRange.replace(/^=/,'')})})):null}}
+ if(op.geometryIdentityName!=null&&(op.intent!=='set_chart'||typeof op.geometryIdentityName!=='string'||!DEF_NAME.test(op.geometryIdentityName)))return {ok:false,outcome:'xlsx-chart-task-invalid-geometry-identity',authority:'PLAN_ONLY',writeAllowed:false}
+ const geometryIdentityName=op.geometryIdentityName==null?null:`${op.geometryIdentityName}_${width}x${height}`
+ if(geometryIdentityName&&geometryIdentityName.length>255)return {ok:false,outcome:'xlsx-chart-task-invalid-geometry-identity',authority:'PLAN_ONLY',writeAllowed:false}
+ const sheetRef=/^[A-Za-z_][A-Za-z0-9_.]*$/.test(op.sheet)?op.sheet:`'${op.sheet.replace(/'/g,"''")}'`
+ const absoluteRange=range?`$${columnLabel(range.start.column)}$${range.start.row}:$${columnLabel(range.end.column)}$${range.end.row}`:null
+ const geometryIdentityRef=geometryIdentityName==null?null:`=${sheetRef}!${absoluteRange}`
+ return {ok:true,outcome:'xlsx-chart-task-planned',authority:'PLAN_ONLY',writeAllowed:true,operation:{index:0,intent:op.intent,sheet:op.sheet,name:op.name,newName:op.intent==='rename_chart'?op.newName:undefined,range:range?.address,chartType:op.chartType,title:String(op.title),width,height,expectedSeriesCount:op.expectedSeriesCount,inRows:!!op.inRows,geometryIdentityName,geometryIdentityRef,presentation:presentation?JSON.parse(JSON.stringify(presentation)):null,chartPosition:position?{fromCol:position.fromCol,colOffset:position.colOffset,fromRow:position.fromRow,rowOffset:position.rowOffset}:null,series:series?series.map(s=>({index:s.index,...(s.name==null?{}:{name:s.name}),...(s.valuesRange==null?{}:{valuesRange:s.valuesRange.replace(/^=/,'')}),...(s.xValuesRange==null?{}:{xValuesRange:s.xValuesRange.replace(/^=/,'')}),...(s.categoryRange==null?{}:{categoryRange:s.categoryRange.replace(/^=/,'')})})):null}}
 }
 function identity(inv,name){return (inv?.sheets||[]).filter(x=>x?.name===name).length===1}
 function measured(r){return r?.ok===true&&r?.source==='live-coedit-editor'&&r?.verification?.measurable===true}
