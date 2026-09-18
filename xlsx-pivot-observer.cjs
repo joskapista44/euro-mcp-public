@@ -58,11 +58,12 @@ function pivotObserveCommand(spec){
     if(!destination)return {ok:false,outcome:'pivot-destination-unavailable',source:'live-coedit-editor'}
     stage='insert-pivot-existing';created=Api.InsertPivotExistingWorksheet(source,destination)
    }else{stage='insert-pivot-new';created=Api.InsertPivotNewWorksheet(source)}
-   if(!created||!has(created,'SetName')||!has(created,'AddFields')||!has(created,'AddDataField')||!has(created,'SetStyleName'))return {ok:false,outcome:'pivot-build-api-unavailable',source:'live-coedit-editor'}
-   // Follow the public AddFields example: establish the value field before
-   // moving row/column fields. Existing-sheet insertion otherwise leaves the
-   // data-field cache null in the co-editing runtime.
-   stage='set-name';created.SetName(spec.name);stage='add-data-field';created.AddDataField(spec.dataField);stage='add-fields';created.AddFields({rows:spec.rowField,columns:spec.columnField});stage='set-style';created.SetStyleName(spec.styleName);if(has(created,'RefreshTable')){stage='refresh';created.RefreshTable()}
+   if(!created||!has(created,'SetName')||!has(created,'AddFields')||!has(created,'MoveField')||!has(created,'SetStyleName'))return {ok:false,outcome:'pivot-build-api-unavailable',source:'live-coedit-editor'}
+   // AddDataField mutates through asc_addDataField and then immediately reads
+   // dataFields.length. In the co-editing existing-sheet path that public
+   // wrapper can receive null and throw after mutation. MoveField(...,
+   // "Values") is the public equivalent and has no unsafe return-wrapper read.
+   stage='set-name';created.SetName(spec.name);stage='move-data-field';created.MoveField(spec.dataField,'Values');stage='add-fields';created.AddFields({rows:spec.rowField,columns:spec.columnField});stage='set-style';created.SetStyleName(spec.styleName);if(has(created,'RefreshTable')){stage='refresh';created.RefreshTable()}
   }else if(spec.intent==='refresh_pivot'){
    var existing=pivot(spec.name)
    if(!matchIdentity(before))return {ok:false,outcome:'pivot-refresh-identity-conflict',source:'live-coedit-editor',state:before}
