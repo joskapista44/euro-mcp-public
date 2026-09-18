@@ -13,6 +13,7 @@ function planTask(task){
  // InsertPivotNewWorksheet concatenates the worksheet name without quoting.
  if(!/^[A-Za-z_][A-Za-z0-9_]*$/.test(op.sourceSheet))return {ok:false,outcome:'xlsx-pivot-source-sheet-quoting-unsupported',authority:'PLAN_ONLY',writeAllowed:false}
  const range=parseA1Range(op.sourceRange);if(!range)return {ok:false,outcome:'xlsx-pivot-task-invalid-source-range',authority:'PLAN_ONLY',writeAllowed:false}
+ if(op.sourceIdentityName!==undefined&&(typeof op.sourceIdentityName!=='string'||!NAME.test(op.sourceIdentityName)))return {ok:false,outcome:'xlsx-pivot-task-invalid-source-identity-name',authority:'PLAN_ONLY',writeAllowed:false}
  for(const k of ['rowField','columnField','dataField','styleName'])if(typeof op[k]!=='string'||!op[k])return {ok:false,outcome:'xlsx-pivot-task-field-required',authority:'PLAN_ONLY',writeAllowed:false,field:k}
  if(!Array.isArray(op.assertions)||op.assertions.length<1||op.assertions.some(a=>!Array.isArray(a?.items)||!a.items.length||a.expected==null))return {ok:false,outcome:'xlsx-pivot-task-semantic-assertions-required',authority:'PLAN_ONLY',writeAllowed:false}
  var destination=null
@@ -23,7 +24,7 @@ function planTask(task){
   destination={pivotSheet:op.pivotSheet,destinationRange:dr.address,...(op.repairIncompletePivot===true?{repairIncompletePivot:true}:{})}
  }
  if(op.repairIncompletePivot!==undefined&&!destination)return {ok:false,outcome:'xlsx-pivot-task-invalid-repair-policy',authority:'PLAN_ONLY',writeAllowed:false}
- return {ok:true,outcome:'xlsx-pivot-task-planned',authority:'PLAN_ONLY',writeAllowed:true,operation:{index:0,intent:op.intent,name:op.name,sourceSheet:op.sourceSheet,sourceRange:range.address,rowField:op.rowField,columnField:op.columnField,dataField:op.dataField,styleName:op.styleName,assertions:op.assertions.map(a=>({items:a.items.map(String),expected:String(a.expected)})),...destination}}
+ return {ok:true,outcome:'xlsx-pivot-task-planned',authority:'PLAN_ONLY',writeAllowed:true,operation:{index:0,intent:op.intent,name:op.name,sourceSheet:op.sourceSheet,sourceRange:range.address,rowField:op.rowField,columnField:op.columnField,dataField:op.dataField,styleName:op.styleName,assertions:op.assertions.map(a=>({items:a.items.map(String),expected:String(a.expected)})),...(op.sourceIdentityName?{sourceIdentityName:op.sourceIdentityName}:{}),...destination}}
 }
 function identity(inv,name){return (inv?.sheets||[]).filter(x=>x?.name===name).length===1}
 function measured(r){return r?.ok===true&&r?.source==='live-coedit-editor'&&r?.verification?.measurable===true}

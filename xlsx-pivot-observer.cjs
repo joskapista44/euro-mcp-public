@@ -3,6 +3,7 @@ function pivotObserveCommand(spec){
  var stage='init'
  function has(o,n){return !!o&&typeof o[n]==='function'}
  function normAddr(v){var s=String(v==null?'':v).replace(/\$/g,'').toUpperCase(),i=s.lastIndexOf('!');return i>=0?s.slice(i+1):s}
+ function absoluteRef(sheet,range){var parts=normAddr(range).split(':');return '='+sheet+'!'+parts.map(function(cell){var m=cell.match(/^([A-Z]+)([0-9]+)$/);return m?'$'+m[1]+'$'+m[2]:cell}).join(':')}
  function safe(fn){try{return {ok:true,value:fn()}}catch(e){return {ok:false,error:String(e&&e.message||e)}}}
  function pivot(name){if(!has(Api,'GetPivotByName'))return null;try{return Api.GetPivotByName(name)}catch(_){return null}}
  function scalar(v){return v==null?null:String(v)}
@@ -11,10 +12,19 @@ function pivotObserveCommand(spec){
   var required=['GetName','GetSource','GetParent','GetRowFields','GetColumnFields','GetDataFields','GetStyleName','GetData']
   for(var i=0;i<required.length;i++)if(!has(p,required[i]))return {measurable:false,reason:'pivot-getter-unavailable',getter:required[i]}
   var src=safe(function(){return p.GetSource()}),parent=safe(function(){return p.GetParent()})
-  if(!src.ok||!parent.ok||!src.value||!parent.value||!has(src.value,'GetAddress')||!has(parent.value,'GetName'))return {measurable:false,reason:'pivot-identity-unavailable'}
-  var sourceSheet=null
-  if(has(src.value,'GetWorksheet')){var sourceParent=safe(function(){return src.value.GetWorksheet()});if(sourceParent.ok&&sourceParent.value&&has(sourceParent.value,'GetName'))sourceSheet=sourceParent.value.GetName()}
-  var state={measurable:true,present:true,name:p.GetName(),source:normAddr(src.value.GetAddress()),sourceSheet:sourceSheet,parentSheet:parent.value.GetName(),rowFields:p.GetRowFields().length,columnFields:p.GetColumnFields().length,dataFields:p.GetDataFields().length,styleName:p.GetStyleName(),assertions:[]}
+  if(!parent.ok||!parent.value||!has(parent.value,'GetName'))return {measurable:false,reason:'pivot-parent-identity-unavailable'}
+  var source=null,sourceSheet=null,sourceProof=null
+  if(src.ok&&src.value&&has(src.value,'GetAddress')){
+   source=normAddr(src.value.GetAddress());sourceProof='public-GetSource'
+   if(has(src.value,'GetWorksheet')){var sourceParent=safe(function(){return src.value.GetWorksheet()});if(sourceParent.ok&&sourceParent.value&&has(sourceParent.value,'GetName'))sourceSheet=sourceParent.value.GetName()}
+  }else if(spec.sourceIdentityName&&has(Api,'GetDefName')){
+   var marker=safe(function(){return Api.GetDefName(spec.sourceIdentityName)}),expectedRef=absoluteRef(spec.sourceSheet,spec.sourceRange)
+   if(!marker.ok||!marker.value||!has(marker.value,'GetName')||!has(marker.value,'GetRefersTo'))return {measurable:false,reason:'pivot-source-marker-unavailable',sourceError:src.error||null}
+   var markerName=safe(function(){return marker.value.GetName()}),markerRef=safe(function(){return marker.value.GetRefersTo()})
+   if(!markerName.ok||!markerRef.ok||markerName.value!==spec.sourceIdentityName||markerRef.value!==expectedRef)return {measurable:false,reason:'pivot-source-marker-mismatch',sourceError:src.error||null,expectedRef:expectedRef,actualRef:markerRef.ok?markerRef.value:null}
+   source=normAddr(spec.sourceRange);sourceSheet=spec.sourceSheet;sourceProof='defined-name-fallback'
+  }else return {measurable:false,reason:'pivot-source-identity-unavailable',sourceError:src.error||null}
+  var state={measurable:true,present:true,name:p.GetName(),source:source,sourceSheet:sourceSheet,sourceProof:sourceProof,parentSheet:parent.value.GetName(),rowFields:p.GetRowFields().length,columnFields:p.GetColumnFields().length,dataFields:p.GetDataFields().length,styleName:p.GetStyleName(),assertions:[]}
   var assertions=Array.isArray(spec.assertions)?spec.assertions:[]
   for(var j=0;j<assertions.length;j++){var a=assertions[j],r=safe(function(){return p.GetData(a.items)});state.assertions.push({items:a.items,ok:r.ok,value:r.ok?scalar(r.value):null,error:r.ok?null:r.error,expected:scalar(a.expected)})}
   return state

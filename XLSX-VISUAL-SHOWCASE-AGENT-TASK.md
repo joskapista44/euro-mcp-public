@@ -17,6 +17,7 @@ Use the EURO-MCP `office_xlsx_batch` tool. The workbook must demonstrate that yo
   - `MCP_PivotView_<run_id>`
 - Derived object names:
   - defined name: `MCP_Sales_<run_id>`
+  - pivot source identity: `MCP_PivotSource_<run_id>`
   - pivot: `MCP_Pivot_<run_id>`
   - charts: `MCP_Trend_<run_id>` and `MCP_Region_<run_id>`
 
@@ -69,6 +70,7 @@ Apply these features:
 - Add whole-number validation to `H2:H13`: stop alert, between 1 and 5.
 - Add conditional formatting to `F2:F13`: cell value greater than `25000`, pale-green fill, priority 1.
 - Create the run-specific workbook defined name referring to `=<data-sheet>!$A$1:$H$13`.
+- Create `MCP_PivotSource_<run_id>` referring exactly to `=<data-sheet>!$A$1:$E$13`; pass that name as the pivot operation's `sourceIdentityName` so a reopened session can prove the persisted pivot source even when the deployed `GetSource()` wrapper is unavailable.
 
 ### 2. Plan worksheet
 
