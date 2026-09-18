@@ -4,7 +4,6 @@ const agent=require('./xlsx-agent-chart-task.cjs')
 const {runChartInFrame}=require('./live-charts.cjs')
 const {runChartPresentationInFrame}=require('./live-chart-presentation.cjs')
 const {runChartDataObjectInFrame}=require('./live-chart-data-objects.cjs')
-const {runCommand:runDefinedNameCommand}=require('./xlsx-persistent-defined-name.cjs')
 function chartSemanticStateCommand(spec){
  function has(o,n){return !!o&&typeof o[n]==='function'}
  function safe(o,n){try{return has(o,n)?o[n]():null}catch(_){return null}}
@@ -27,7 +26,10 @@ function chartSemanticStateCommand(spec){
    // Reopened charts can expose 0x0 through public geometry getters even
    // though SetSize was previously live-verified. The exact durable marker is
    // accepted only for that known unavailable state, never over non-zero data.
-   if(state.geometryIdentityVerified&&Number(state.width)===0&&Number(state.height)===0){state.width=spec.width;state.height=spec.height;state.geometryReadback='durable-identity-fallback'}
+   if(Number(state.width)===0&&Number(state.height)===0){
+    state.geometryReadback=state.geometryIdentityVerified?'durable-identity-fallback':'public-getters-unavailable'
+    if(state.geometryIdentityVerified){state.width=spec.width;state.height=spec.height}
+   }else state.geometryReadback='public-getters'
   }
   var coreRequired=spec.intent==='set_chart'?['name','chartType','title','width','height','seriesCount']:['name'];for(var j=0;j<coreRequired.length;j++){var core=coreRequired[j];if(state[core]==null)unknown.push(core)}
   var p=spec.presentation
@@ -56,7 +58,7 @@ function stateOf(observed,op){
 }
 function chartStateMatches(state,op){
  if(!(state.measurable&&state.present&&state.count===1&&String(state.chartType)===op.chartType&&state.title===op.title&&Number(state.width)===op.width&&Number(state.height)===op.height&&Number(state.seriesCount)===op.expectedSeriesCount))return false
- if(op.geometryIdentityName&&state.geometryIdentityVerified!==true)return false
+ if(op.geometryIdentityName&&state.geometryIdentityPresent&&state.geometryIdentityVerified!==true)return false
  const p=op.presentation||{}
  if(p.legendPosition!=null&&String(state.legendPosition)!==p.legendPosition)return false
  if(p.horizontalAxisTitle!=null&&state.horizontalAxisTitle!==p.horizontalAxisTitle)return false
@@ -124,14 +126,6 @@ async function chartObserved(session,op,apply){
  }
  if(op.intent==='set_chart'){
   for(const call of advancedMutationSpecs(before,op)){const fn=call.runner==='presentation'?runChartPresentationInFrame:runChartDataObjectInFrame,r=await fn(session.frame,session.apiWhere,call.spec,8000);mutations.push(r);if(r?.ok&&r?.verification?.status==='PASS')mutated=true;else return {ok:false,outcome:'chart-mutation-unverified',source:'live-coedit-editor',state:before,mutation:r,mutations,mutationAttempted:mutated,verification:{measurable:true,match:false}}}
-  if(op.geometryIdentityName&&!before.geometryIdentityVerified){
-   const measured=await inspect(),withoutMarker={...op,geometryIdentityName:null,geometryIdentityRef:null}
-   if(!measured?.ok||!chartStateMatches(measured.state,withoutMarker))return {ok:false,outcome:'chart-geometry-not-proven-before-identity',source:'live-coedit-editor',state:measured?.state||null,mutations,mutationAttempted:mutated,verification:{measurable:!!measured?.ok,match:false}}
-   const marker=await runDefinedNameCommand(session,{intent:'set_defined_name',name:op.geometryIdentityName,refersTo:op.geometryIdentityRef},true)
-   mutations.push({operation:'chart.geometry.identity',...marker})
-   if(!marker?.ok||marker?.noOp===true||marker?.verification?.match!==true)return {ok:false,outcome:'chart-geometry-identity-unverified',source:'live-coedit-editor',state:measured.state,mutation:marker,mutations,mutationAttempted:mutated,verification:{measurable:true,match:false}}
-   mutated=true
-  }
  }
  const afterRead=await inspect()
  if(!afterRead?.ok)return {ok:false,outcome:'chart-post-state-unverifiable',source:'live-coedit-editor',mutation:changed,mutations,mutationAttempted:mutated,readback:afterRead}

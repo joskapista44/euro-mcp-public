@@ -13,15 +13,16 @@ for(const required of [
 assert(!/waitForTimeout|sleep\(|setTimeout\(/.test(task),'agent task must not prescribe a fixed delay')
 const showcase=buildShowcaseTask('ABC123'),showcasePlan=batch.planTask(showcase)
 assert.equal(showcasePlan.ok,true)
-assert.equal(showcase.operations.length,54)
-assert.equal(showcase.expected.freshWrites,53)
-assert.equal(showcasePlan.steps.length,48)
+assert.equal(showcase.operations.length,56)
+assert.equal(showcase.expected.freshWrites,55)
+assert.equal(showcasePlan.steps.length,50)
 assert.equal(showcasePlan.readbacks.length,3)
 assert.equal(showcase.expected.totalRevenue,287205)
 assert.equal(showcase.expected.targetRevenue,282000)
 assert.equal(showcase.expected.variance,5205)
 const showcasePivot=showcase.operations.find(op=>op.intent==='create_pivot')
 assert.deepEqual({sourceRange:showcasePivot.sourceRange,sourceIdentityName:showcasePivot.sourceIdentityName,dataField:showcasePivot.dataField,pivotSheet:showcasePivot.pivotSheet,destinationRange:showcasePivot.destinationRange,assertions:showcasePivot.assertions},{sourceRange:'A1:E13',sourceIdentityName:'MCP_PivotSource_ABC123',dataField:'Units',pivotSheet:'MCP_PivotView_ABC123',destinationRange:'A1',assertions:[{items:['North','Core'],expected:405},{items:['North','Plus'],expected:252},{items:['South','Core'],expected:300},{items:['South','Plus'],expected:200}]})
+assert.deepEqual(showcase.operations.slice(-4,-2),[{intent:'set_defined_name',name:'MCP_TrendSize_ABC123_3800000x2300000',refersTo:'=MCP_Dash_ABC123!$A$10:$C$16'},{intent:'set_defined_name',name:'MCP_RegionSize_ABC123_3800000x2300000',refersTo:'=MCP_Dash_ABC123!$E$10:$F$12'}])
 const plan=batch.planTask({operations:[
  {intent:'format_range',sheet:'D',range:'A1:J1',format:{bold:true}},
  {intent:'format_range',sheet:'D',range:'A4:A7',format:{bold:true}},
