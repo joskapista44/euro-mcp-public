@@ -2,7 +2,7 @@
 const assert=require('assert/strict')
 const Module=require('module')
 const originalLoad=Module._load
-let calls=[]
+let calls=[],bodies=[]
 Module._load=function(request,parent,isMain){
  if(request==='./xlsx-persistent-session.cjs')return {}
  if(request==='./xlsx-agent-pivot-task.cjs')return {}
@@ -13,7 +13,7 @@ const pivot=require('./xlsx-persistent-pivot.cjs')
 Module._load=originalLoad
 function session(results){
  let i=0
- return {apiWhere:'window.editor',frame:{evaluate:async()=>{calls.push(i);return results[i++]}}}
+ return {apiWhere:'window.editor',frame:{evaluate:async arg=>{calls.push(i);bodies.push(arg.body);return results[i++]}}}
 }
 ;(async()=>{
  const spec={intent:'create_pivot',name:'P'}
@@ -28,7 +28,7 @@ function session(results){
   {ok:true,outcome:'pivot-already-satisfied',noOp:true,verification:{measurable:true,match:true},state:{present:true}}
  ])
  r=await pivot.runCommand(s,spec,true)
- assert.equal(r.ok,true);assert.equal(r.applied,true);assert.equal(r.outcome,'pivot-live-verified-after-command-boundary');assert.equal(calls.length,2)
+ assert.equal(r.ok,true);assert.equal(r.applied,true);assert.equal(r.outcome,'pivot-live-verified-after-command-boundary');assert.equal(calls.length,2);assert.match(bodies[0],/\\"apply\\":true/);assert.match(bodies[1],/\\"apply\\":false/)
  assert.equal(r.postMutationObservation.noOp,true)
 
  calls=[]
