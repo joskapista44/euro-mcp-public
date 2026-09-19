@@ -59,6 +59,6 @@ async function executeChartTask({task,api}){
  if(!finalInventory?.ok||finalInventory.authority!=='LIVE_READ')return {ok:false,outcome:'xlsx-chart-task-final-read-failed',authority:'PRIMITIVE_LIVE_VERIFY_ONLY',writeAllowed:false,plan}
  const final=await api.chartObserved(op,false)
  if(!measured(final)||!final.verification.match||final.noOp!==true)return {ok:false,outcome:'xlsx-chart-task-whole-verify-failed',authority:'PRIMITIVE_LIVE_VERIFY_ONLY',writeAllowed:false,plan,final}
- return {ok:true,outcome:'xlsx-chart-task-live-verified',authority:'LIVE_VERIFY',writeAllowed:false,noOp:false,plan,receipt:[{index:0,intent:op.intent,status:'APPLIED',resolvedTarget:{sheet:op.sheet,name:resolvedName},identityProof:'fresh-live-inventory+unique-chart-name+semantic-chart-readback',verification:'LIVE_VERIFY'}],wholeTaskVerification:{ok:true,authority:'LIVE_VERIFY',state:final.state}}
+ return {ok:true,outcome:'xlsx-chart-task-live-verified',authority:'LIVE_VERIFY',writeAllowed:false,noOp:false,plan,mutationEvidence:{before:applied.before,mutations:applied.mutations},receipt:[{index:0,intent:op.intent,status:'APPLIED',resolvedTarget:{sheet:op.sheet,name:resolvedName},identityProof:'fresh-live-inventory+unique-chart-name+semantic-chart-readback',verification:'LIVE_VERIFY'}],wholeTaskVerification:{ok:true,authority:'LIVE_VERIFY',state:final.state}}
 }
 module.exports={NAME,planTask,identity,measured,executeChartTask}
