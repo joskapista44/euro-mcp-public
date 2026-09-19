@@ -31,7 +31,8 @@ function planTask(task){
   for(const s of series){const keys=['index','name','valuesRange','xValuesRange','categoryRange'];if(!s||typeof s!=='object'||Array.isArray(s)||Object.keys(s).some(k=>!keys.includes(k))||!Number.isInteger(s.index)||s.index<0||s.index>=op.expectedSeriesCount||seen.has(s.index)||Object.keys(s).length<2)return {ok:false,outcome:'xlsx-chart-task-invalid-series',authority:'PLAN_ONLY',writeAllowed:false};seen.add(s.index);for(const k of keys.slice(1))if(s[k]!=null&&(typeof s[k]!=='string'||!s[k]))return {ok:false,outcome:'xlsx-chart-task-invalid-series',authority:'PLAN_ONLY',writeAllowed:false,field:k}}
  }
  if(op.geometryIdentityName!=null&&(op.intent!=='set_chart'||typeof op.geometryIdentityName!=='string'||!DEF_NAME.test(op.geometryIdentityName)))return {ok:false,outcome:'xlsx-chart-task-invalid-geometry-identity',authority:'PLAN_ONLY',writeAllowed:false}
- const geometryIdentityName=op.geometryIdentityName==null?null:`${op.geometryIdentityName}_${width}x${height}`
+ const geometrySuffix=`_${width}x${height}`
+ const geometryIdentityName=op.geometryIdentityName==null?null:(op.geometryIdentityName.endsWith(geometrySuffix)?op.geometryIdentityName:`${op.geometryIdentityName}${geometrySuffix}`)
  if(geometryIdentityName&&geometryIdentityName.length>255)return {ok:false,outcome:'xlsx-chart-task-invalid-geometry-identity',authority:'PLAN_ONLY',writeAllowed:false}
  const sheetRef=/^[A-Za-z_][A-Za-z0-9_.]*$/.test(op.sheet)?op.sheet:`'${op.sheet.replace(/'/g,"''")}'`
  const absoluteRange=range?`$${columnLabel(range.start.column)}$${range.start.row}:$${columnLabel(range.end.column)}$${range.end.row}`:null
