@@ -19,7 +19,13 @@ const cf=require('./xlsx-persistent-conditional-format.cjs')
   {intent:'format_range',sheet:'S',range:'A1:H1',format:{bold:true}},
   {intent:'format_range',sheet:'S',range:'A1:H1',format:{fillColor:[1,2,3]}}
  ]}).outcome,'xlsx-batch-conflicting-goals')
- assert.equal(batch.planTask({operations:[op],readbacks:[{sheet:'S',range:'A1:ZZ999'}]}).outcome,'xlsx-batch-invalid-readback')
+ const cfPositive={intent:'add_conditional_format',sheet:'S',range:'D4:D15',rule:{type:'xlCellValue',operator:'xlGreater',formula1:'0',priority:1,fillColor:[226,239,218]}}
+ const cfNegative={intent:'add_conditional_format',sheet:'S',range:'D4:D15',rule:{type:'xlCellValue',operator:'xlLess',formula1:'0',priority:2,fillColor:[255,199,206]}}
+ assert.equal(batch.planTask({operations:[cfPositive,{...cfPositive}]}).outcome,'xlsx-batch-conflicting-goals')
+ const cfPair=batch.planTask({operations:[cfPositive,cfNegative]});assert.equal(cfPair.ok,true);assert.equal(cfPair.steps.length,2)
+ const cfDifferentRange=batch.planTask({operations:[cfPositive,{...cfPositive,range:'H4:H7'}]});assert.equal(cfDifferentRange.ok,true)
+ const cfDifferentSheet=batch.planTask({operations:[cfPositive,{...cfPositive,sheet:'T'}]});assert.equal(cfDifferentSheet.ok,true)
+  assert.equal(batch.planTask({operations:[op],readbacks:[{sheet:'S',range:'A1:ZZ999'}]}).outcome,'xlsx-batch-invalid-readback')
  let reads=0
  const invalid=await batch.executeBatchTask({task:{operations:[op,{intent:'unknown'}]},api:{inspect(){reads++}}})
  assert.equal(invalid.ok,false);assert.equal(reads,0)
