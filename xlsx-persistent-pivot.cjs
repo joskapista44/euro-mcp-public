@@ -15,4 +15,4 @@ async function runCommand(session,spec,apply){
  return {...first,postMutationObservation:observed}
 }
 async function executePivotTaskInPersistentSession(options={}){const sessionOptions=optionsOf(options);if(!sessionOptions)return {ok:false,outcome:'xlsx-persistent-credentials-required',authority:'PLAN_ONLY',writeAllowed:false};return persistent.withPersistentXlsxSession(sessionOptions,api=>agent.executePivotTask({task:options.task,api:{...api,pivotObserved:async(spec,apply)=>{const r=await runCommand(api.session,spec,apply);if(apply&&r?.ok&&!r.noOp)api.session.markWrite();return r}}}))}
-module.exports={runCommand,executePivotTaskInPersistentSession}
+module.exports={callObserved,runCommand,executePivotTaskInPersistentSession}
