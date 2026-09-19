@@ -56,8 +56,17 @@ function stateOf(observed,op){
  const c=matches[0]
  return {measurable:true,present:true,count:1,name:c.name,chartType:c.chartType,title:c.title==null?null:String(c.title).replace(/[\r\n]+$/g,''),width:c.width,height:c.height,seriesCount:c.seriesCount}
 }
+function geometryMatches(actual,expected,state,op){
+ const a=Number(actual),e=Number(expected)
+ if(a===e)return true
+ // ONLYOFFICE may quantize persisted chart geometry by sub-EMU fractions on
+ // reopen. Accept that measured representation only when the exact durable
+ // size identity for this chart is present and verified. This does not mask
+ // a conflicting nonzero size: the tolerance is strictly below one EMU.
+ return Number.isFinite(a)&&Number.isFinite(e)&&Math.abs(a-e)<1&&state?.geometryIdentityVerified===true&&!!op?.geometryIdentityName
+}
 function chartStateMatches(state,op){
- if(!(state.measurable&&state.present&&state.count===1&&String(state.chartType)===op.chartType&&state.title===op.title&&Number(state.width)===op.width&&Number(state.height)===op.height&&Number(state.seriesCount)===op.expectedSeriesCount))return false
+ if(!(state.measurable&&state.present&&state.count===1&&String(state.chartType)===op.chartType&&state.title===op.title&&geometryMatches(state.width,op.width,state,op)&&geometryMatches(state.height,op.height,state,op)&&Number(state.seriesCount)===op.expectedSeriesCount))return false
  if(op.geometryIdentityName&&state.geometryIdentityPresent&&state.geometryIdentityVerified!==true)return false
  const p=op.presentation||{}
  if(p.legendPosition!=null&&String(state.legendPosition)!==p.legendPosition)return false
