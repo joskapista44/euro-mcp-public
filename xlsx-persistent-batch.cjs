@@ -77,7 +77,7 @@ families.push(
  {file:'move-sheet',intents:['move_sheet'],agent:require('./xlsx-agent-move-task.cjs'),execute:'executeMoveTask',planTask:task=>{const op=task?.operations?.[0],ok=task?.operations?.length===1&&op?.intent==='move_sheet'&&typeof op.sheet==='string'&&op.sheet.trim()&&typeof op.referenceSheet==='string'&&op.referenceSheet.trim()&&op.sheet!==op.referenceSheet&&['before','after'].includes(op.position);return ok?{ok:true,operation:{index:0,intent:'move_sheet',sheet:op.sheet,referenceSheet:op.referenceSheet,position:op.position}}:{ok:false,outcome:'xlsx-move-task-invalid',authority:'PLAN_ONLY'}}}
 )
 function planTask(task){
- if(!Array.isArray(task?.operations)||!task.operations.length||task.operations.length>100)return {ok:false,outcome:'xlsx-batch-invalid-operations',authority:'PLAN_ONLY'}
+ if(!Array.isArray(task?.operations)||!task.operations.length||task.operations.length>1000)return {ok:false,outcome:'xlsx-batch-invalid-operations',authority:'PLAN_ONLY'}
  const plannedReadbacks=readbackPlan(task);if(!plannedReadbacks.ok)return plannedReadbacks
  const steps=[],targets=new Set()
  const firstNonCore=task.operations.findIndex(op=>!core.intents.has(op?.intent))
