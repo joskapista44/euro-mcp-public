@@ -30,7 +30,7 @@ const operation=z.object({
  for(const key of Object.keys(op))if(key!=='intent'&&!fields[op.intent].includes(key))ctx.addIssue({code:'custom',path:[key],message:'Field not supported by this intent'})
 })
 const readback=z.object({sheet:str,range:str}).strict()
-const input={file_id:z.string().regex(/^[1-9][0-9]*$/),operations:z.array(operation).min(1).max(100),readbacks:z.array(readback).max(10).optional()}
+const input={file_id:z.string().regex(/^[1-9][0-9]*$/),operations:z.array(operation).min(1).max(1000),readbacks:z.array(readback).max(10).optional()}
 const schema=z.object(input).strict()
 function result(payload){return {isError:payload.ok!==true,content:[{type:'text',text:JSON.stringify(payload)}]}}
 function makeHandler(deps={}){
