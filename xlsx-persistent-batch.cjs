@@ -69,6 +69,10 @@ function goalTarget(family,operation){
  // duplicate targets still fail closed.
  if(family.file==='format'||family.file==='merge')return family.file+':'+sheet+':'+range
  if(family.file==='layout')return family.file+':'+sheet+':'+range+':'+String(operation.type||'')
+ if(family.file==='conditional-format'){
+  const r=operation.rule||{},value=v=>v===undefined?'*':String(v==null?'':v),fill=r.fillColor===undefined?'*':Array.isArray(r.fillColor)?r.fillColor.join(','):String(r.fillColor)
+  return family.file+':'+sheet+':'+range+':'+[value(r.type),value(r.operator),value(r.formula1),value(r.formula2),value(r.priority),fill].join(':')
+ }
  if(family.file==='chart')return family.file+':'+sheet+':'+String(operation.name||operation.newName||'').toLowerCase()
  return family.file+':'+String(operation.sheet||operation.name).toLowerCase()
 }
