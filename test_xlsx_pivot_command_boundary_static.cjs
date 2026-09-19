@@ -28,7 +28,7 @@ function session(results){
   {ok:true,outcome:'pivot-already-satisfied',noOp:true,verification:{measurable:true,match:true},state:{present:true}}
  ])
  r=await pivot.runCommand(s,spec,true)
- assert.equal(r.ok,true);assert.equal(r.applied,true);assert.equal(r.outcome,'pivot-live-verified-after-command-boundary');assert.equal(calls.length,2);assert.match(bodies[0],/\\"apply\\":true/);assert.match(bodies[1],/\\"apply\\":false/)
+ assert.equal(r.ok,true);assert.equal(r.applied,true);assert.equal(r.outcome,'pivot-live-verified-after-command-boundary');assert.equal(calls.length,2);assert.match(bodies[0],/"apply":true/);assert.match(bodies[1],/"apply":false/)
  assert.equal(r.postMutationObservation.noOp,true)
 
  calls=[];bodies=[]
