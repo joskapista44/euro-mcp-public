@@ -53,7 +53,7 @@ function d(r){return {ok:r.ok,outcome:r.outcome,authority:r.authority,noOp:r.noO
   for(const s of [acSheet,acDest,acOther]){const cr=await api.createSheetVerified(s);if(!cr.ok)return cr}
   const values=[['Region','Style','Price'],['East','A',10],['West','B',20],['East','B',30],['West','A',40]]
   const w=await api.writeRangeVerified({sheet:acSheet,range:'A1:C5',values});if(!w.ok)return w
-  const activated=await api.session.frame.evaluate(({where,name})=>new Promise(resolve=>{const e=where==='window.editor'?window.editor:(window.Asc||{}).editor;e.callCommand(function(){try{var s=Api.GetSheet(name);if(!s||typeof s.SetActive!=='function')return {ok:false};s.SetActive();var a=Api.GetActiveSheet();return {ok:true,name:a&&a.GetName?a.GetName():null}}catch(err){return {ok:false,error:String(err)}}},false,resolve)}),{where:api.session.apiWhere,name:acOther})
+  const activated=await api.session.frame.evaluate(({where,name})=>new Promise(resolve=>{const e=where==='window.editor'?window.editor:(window.Asc||{}).editor;const body=`try{var s=Api.GetSheet(${JSON.stringify(acOther)});if(!s||typeof s.SetActive!=='function')return {ok:false};s.SetActive();var a=Api.GetActiveSheet();return {ok:true,name:a&&a.GetName?a.GetName():null}}catch(err){return {ok:false,error:String(err)}}`;e.callCommand(new Function(body),false,resolve)}),{where:api.session.apiWhere,name:acOther})
   if(!activated?.ok||activated.name!==acOther)return {ok:false,outcome:'pivot-active-context-fixture-failed',authority:'LIVE_READ',activated}
   return pivotAgent.executePivotTask({task:createTask(acSheet,acName,acDest),api:liveApi(api)})
  });console.log('PIVOT ACTIVE-CONTEXT CREATE TASK',JSON.stringify(d(activeContext),null,2))
