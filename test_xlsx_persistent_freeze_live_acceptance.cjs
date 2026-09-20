@@ -8,7 +8,7 @@ process.env.EURO_PLAYWRIGHT_PATH=process.env.EURO_PLAYWRIGHT_PATH||'/home/user/m
 function secret(id){const v=require('/home/user/marveen/dist/web/vault.js');const r=v.getSecret(id,'xlsx-persistent-freeze-live-acceptance');if(!r)throw new Error(`vault secret not found: ${id}`);return r}
 const credentials={url:process.env.EURO_NEXTCLOUD_URL||'https://mt-server.eu',user:process.env.EURO_NEXTCLOUD_USER||'elliot',pass:secret('Elliot_nc_pass')}
 const sessionOptions={url:credentials.url,user:credentials.user,pass:credentials.pass,fileId:FILE_ID,timeoutMs:30000,pollMs:50}
-function compact(r){return {ok:r.ok,outcome:r.outcome,authority:r.authority,noOp:r.noOp,writes:r.persistentSession?.writes,barrier:r.persistentSession?.persistenceBarrier?.ok,steps:r.steps?.map(x=>({outcome:x.outcome,noOp:x.noOp,verification:x.wholeTaskVerification?.verification}))}}
+function compact(r){return {ok:r.ok,outcome:r.outcome,authority:r.authority,noOp:r.noOp,writes:r.persistentSession?.writes,barrier:r.persistentSession?.persistenceBarrier?.ok,writeOutcome:r.writeOutcome,verification:r.verification,after:r.after,steps:r.steps?.map(x=>({outcome:x.outcome,noOp:x.noOp,verification:x.wholeTaskVerification?.verification}))}}
 ;(async()=>{
   const sheet=`EURO FRZ ${String(Date.now()).slice(-7)}`
   const setup=await persistent.executeAgentTaskInPersistentSession({fileId:FILE_ID,credentials,timeoutMs:30000,pollMs:50,task:{operations:[{intent:'create_sheet',name:sheet},{intent:'write_range',sheet,range:'A1:D5',values:[[1,2,3,4],[5,6,7,8],[9,10,11,12],[13,14,15,16],[17,18,19,20]]}]}})
