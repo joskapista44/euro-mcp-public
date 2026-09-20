@@ -13,7 +13,8 @@ const definitions=[
  ['conditional-format',['add_conditional_format','delete_conditional_format'],'ConditionalFormat','cfObserved'],
  ['pivot',['create_pivot','refresh_pivot','delete_pivot_sheet'],'Pivot','pivotObserved'],
  ['chart',['set_chart','rename_chart','delete_chart'],'Chart','chartObserved'],
- ['page-layout',['set_page_layout'],'PageLayout','pageLayoutObserved']
+ ['page-layout',['set_page_layout'],'PageLayout','pageLayoutObserved'],
+ ['print-setup',['set_print_setup'],'PrintSetup','printSetupObserved']
 ]
 const core={
  file:'core',
@@ -89,6 +90,7 @@ function goalTarget(family,operation){
  }
  if(family.file==='chart')return family.file+':'+sheet+':'+String(operation.name||operation.newName||'').toLowerCase()
  if(family.file==='page-layout')return family.file+':'+sheet
+ if(family.file==='print-setup')return family.file+':'+sheet+':'+String(operation.mode||'')
  return family.file+':'+String(operation.sheet||operation.name).toLowerCase()
 }
 families.push(
