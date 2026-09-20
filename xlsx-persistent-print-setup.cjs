@@ -7,7 +7,7 @@ function validSpec(s){return s&&typeof s.sheet==='string'&&s.sheet.trim()&&['fit
  Number.isFinite(s.width)&&s.width>0&&Number.isFinite(s.height)&&s.height>0)}
 function printSetupCommand(spec){
  try{
-  var a=Api.GetSheet(spec.sheet),ws=a&&a.worksheet,po=ws&&ws.PagePrintOptions,ps=po&&po.asc_getPageSetup?po.asc_getPageSetup():null
+  var a=Api.GetSheet(spec.sheet);if(!a){var sheets=Api.GetSheets();for(var si=0;si<sheets.length;si++){var candidate=sheets[si];if(candidate&&candidate.GetName&&candidate.GetName()===spec.sheet){a=candidate;break}}}var ws=a&&a.worksheet,po=ws&&ws.PagePrintOptions,ps=po&&po.asc_getPageSetup?po.asc_getPageSetup():null
   if(!a||!ws)return {ok:false,outcome:'print-setup-sheet-unavailable',source:'live-coedit-editor'}
   if(!po||!ps)return {ok:false,outcome:'print-setup-api-unavailable',source:'live-coedit-editor'}
   function read(){return {width:ps.asc_getWidth(),height:ps.asc_getHeight(),fitToWidth:ps.asc_getFitToWidth(),fitToHeight:ps.asc_getFitToHeight(),scale:ps.asc_getScale(),orientation:ps.asc_getOrientation()}}
