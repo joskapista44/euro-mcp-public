@@ -49,5 +49,10 @@ function session(results){
  s=session([{ok:false,outcome:'pivot-semantic-mismatch',applied:true},{ok:true,noOp:true,verification:{measurable:true,match:true}}])
  r=await pivot.runCommand(s,spec,false)
  assert.equal(r.ok,false);assert.equal(calls.length,1)
- console.log('XLSX PIVOT COMMAND BOUNDARY STATIC: PASS')
+ // Source-level guard for the full-batch context fix: existing-sheet insert
+ // must activate and verify the exact destination sheet before insertion.
+ const fs=require('fs'),observerSource=fs.readFileSync(require.resolve('./xlsx-pivot-observer.cjs'),'utf8')
+ assert.match(observerSource,/destinationSheet,'SetActive'/)
+ assert.match(observerSource,/pivot-destination-activation-failed/)
+  console.log('XLSX PIVOT COMMAND BOUNDARY STATIC: PASS')
 })().catch(e=>{console.error(e);process.exitCode=1})
