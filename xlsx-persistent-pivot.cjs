@@ -12,6 +12,16 @@ async function runCommand(session,spec,apply){
  // perform read-only semantic observation; never sleep or redispatch mutation.
  const observed=await callObserved(session,spec,false)
  if(observed?.ok&&observed?.verification?.measurable===true&&observed?.verification?.match===true&&observed?.noOp===true)return {...observed,outcome:'pivot-live-verified-after-command-boundary',applied:true,mutation:first,postMutationObservation:observed}
+ // In a large co-edit batch the first read boundary can expose a transient
+ // public pivot object whose getters are not hydrated yet (measured as an
+ // observer error such as null.map). Cross ONE additional read-only command
+ // boundary. Never sleep and never redispatch the mutation.
+ const transient=observed?.outcome==='pivot-operation-error'||observed?.outcome==='pivot-state-unverifiable'
+ if(transient){
+  const observed2=await callObserved(session,spec,false)
+  if(observed2?.ok&&observed2?.verification?.measurable===true&&observed2?.verification?.match===true&&observed2?.noOp===true)return {...observed2,outcome:'pivot-live-verified-after-second-command-boundary',applied:true,mutation:first,postMutationObservation:observed,secondPostMutationObservation:observed2}
+  return {...first,postMutationObservation:observed,secondPostMutationObservation:observed2}
+ }
  return {...first,postMutationObservation:observed}
 }
 async function executePivotTaskInPersistentSession(options={}){const sessionOptions=optionsOf(options);if(!sessionOptions)return {ok:false,outcome:'xlsx-persistent-credentials-required',authority:'PLAN_ONLY',writeAllowed:false};return persistent.withPersistentXlsxSession(sessionOptions,api=>agent.executePivotTask({task:options.task,api:{...api,pivotObserved:async(spec,apply)=>{const r=await runCommand(api.session,spec,apply);if(apply&&r?.ok&&!r.noOp)api.session.markWrite();return r}}}))}
