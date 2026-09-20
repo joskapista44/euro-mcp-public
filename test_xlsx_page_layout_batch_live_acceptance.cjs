@@ -11,7 +11,7 @@ const options={url:process.env.EURO_NEXTCLOUD_URL||'https://mt-server.eu',user:p
   {intent:'create_sheet',name:sheet},
   {intent:'write_range',sheet,range:'A1:D5',values,formulas:Array.from({length:5},()=>Array(4).fill(null))},
   {intent:'format_range',sheet,range:'A1:D1',format:{bold:true}},
-  {intent:'layout_range',sheet,range:'A:D',type:'column.width',width:20},
+  {intent:'layout_range',sheet,range:'A1:D5',type:'column.width',width:20},
   {intent:'set_page_layout',sheet,orientation:'xlLandscape',topMargin:10,bottomMargin:10,leftMargin:8,rightMargin:8,printGridlines:false,printHeadings:false}
  ],readbacks:[{sheet,range:'A1:D5'}]}
  const first=await batch.executeBatchTaskInPersistentSession({...options,task})
