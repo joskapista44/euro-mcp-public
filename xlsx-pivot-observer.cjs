@@ -66,6 +66,11 @@ function pivotObserveCommand(spec){
     if(!has(Api,'GetSheet')||!has(Api,'InsertPivotExistingWorksheet'))return {ok:false,outcome:'pivot-existing-create-api-unavailable',source:'live-coedit-editor'}
     var destinationSheet=Api.GetSheet(spec.pivotSheet),destination=destinationSheet&&has(destinationSheet,'GetRange')?destinationSheet.GetRange(spec.destinationRange):null
     if(!destination)return {ok:false,outcome:'pivot-destination-unavailable',source:'live-coedit-editor'}
+    // The full batch may leave another worksheet active after sort/filter/CF.
+    // Existing-sheet pivot insertion is context-sensitive in the deployed
+    // editor, so bind the command to the exact destination worksheet first.
+    if(has(destinationSheet,'SetActive'))destinationSheet.SetActive()
+    if(has(Api,'GetActiveSheet')){var active=Api.GetActiveSheet(),activeName=active&&has(active,'GetName')?active.GetName():null;if(activeName!=null&&String(activeName)!==String(spec.pivotSheet))return {ok:false,outcome:'pivot-destination-activation-failed',source:'live-coedit-editor',expectedSheet:spec.pivotSheet,actualSheet:activeName}}
     stage='insert-pivot-existing';created=Api.InsertPivotExistingWorksheet(source,destination)
    }else{stage='insert-pivot-new';created=Api.InsertPivotNewWorksheet(source)}
    if(!created||!has(created,'SetName')||!has(created,'AddFields')||!has(created,'AddDataField')||!has(created,'SetStyleName'))return {ok:false,outcome:'pivot-build-api-unavailable',source:'live-coedit-editor'}
