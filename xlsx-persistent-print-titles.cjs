@@ -15,7 +15,7 @@ function command(spec){
   function normRef(x){return String(x||'').replace(/^=/,'').split(',').map(function(p){return p.replace(/\$/g,'').replace(/'/g,'').replace(/\s+/g,'')}).sort().join(',')}
   var persistedSatisfied=actual===want&&!!before.definedName
   if(persistedSatisfied)return {ok:true,outcome:'print-titles-already-satisfied',source:'live-coedit-editor',noOp:true,applied:false,state:before,verification:{measurable:true,match:true,expected:want,expectedRef:wantRef}}
-  if(!spec.apply)return {ok:true,outcome:'print-titles-observed',source:'live-coedit-editor',noOp:false,applied:false,state:before,verification:{measurable:true,match:false,expected:want,expectedRef:wantRef}}
+  if(!spec.apply)return {ok:true,outcome:'print-titles-observed',source:'live-coedit-editor',noOp:false,applied:false,state:before,diagnostic:{actual:actual,want:want,definedName:before.definedName,wantRef:wantRef,persistedSatisfied:persistedSatisfied,actualType:typeof actual,wantType:typeof want,actualJson:JSON.stringify(actual),wantJson:JSON.stringify(want)},verification:{measurable:true,match:false,expected:want,expectedRef:wantRef}}
   var d=null;try{d=Api.GetDefName('Print_Titles')}catch(_){}
   if(d&&typeof d.SetRefersTo==='function')d.SetRefersTo(wantRef);else if(typeof Api.AddDefName==='function')Api.AddDefName('Print_Titles',wantRef);else return {ok:false,outcome:'print-titles-defined-name-api-unavailable',source:'live-coedit-editor'}
   if(spec.axis==='rows')po.asc_setPrintTitlesHeight(want);else po.asc_setPrintTitlesWidth(want)
