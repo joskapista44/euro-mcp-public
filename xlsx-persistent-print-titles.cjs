@@ -13,7 +13,8 @@ function command(spec){
   function desiredRef(state){var rows=spec.axis==='rows'?want:state.rows,cols=spec.axis==='columns'?want:state.columns,parts=[];if(cols)parts.push("='"+escSheet(spec.sheet)+"'!"+cols);if(rows)parts.push("='"+escSheet(spec.sheet)+"'!"+rows);return parts.join(',')}
   var before=read(),actual=spec.axis==='rows'?before.rows:before.columns,wantRef=desiredRef(before)
   function normRef(x){return String(x||'').replace(/^=/,'').split(',').map(function(p){return p.replace(/\$/g,'').replace(/'/g,'').replace(/\s+/g,'')}).sort().join(',')}
-  if(actual===want&&before.definedName)return {ok:true,outcome:'print-titles-already-satisfied',source:'live-coedit-editor',noOp:true,applied:false,state:before,verification:{measurable:true,match:true,expected:want,expectedRef:wantRef}}
+  var persistedSatisfied=actual===want&&!!before.definedName
+  if(persistedSatisfied)return {ok:true,outcome:'print-titles-already-satisfied',source:'live-coedit-editor',noOp:true,applied:false,state:before,verification:{measurable:true,match:true,expected:want,expectedRef:wantRef}}
   if(!spec.apply)return {ok:true,outcome:'print-titles-observed',source:'live-coedit-editor',noOp:false,applied:false,state:before,verification:{measurable:true,match:false,expected:want,expectedRef:wantRef}}
   var d=null;try{d=Api.GetDefName('Print_Titles')}catch(_){}
   if(d&&typeof d.SetRefersTo==='function')d.SetRefersTo(wantRef);else if(typeof Api.AddDefName==='function')Api.AddDefName('Print_Titles',wantRef);else return {ok:false,outcome:'print-titles-defined-name-api-unavailable',source:'live-coedit-editor'}
