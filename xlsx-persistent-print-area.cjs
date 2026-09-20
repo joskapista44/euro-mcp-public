@@ -11,7 +11,7 @@ async function immediate(session,spec,apply){
   function read(){const d=model.workbook.getDefinesNames('Print_Area',model.getId(),true);return d&&d.sheetId===model.getId()?d.ref:null}
   function esc(n){return "'"+String(n).replace(/'/g,"''")+"'"}
   const target=mode==='clear'?null:esc(sheet)+'!'+range, before=read(),norm=v=>typeof v==='string'?v.replace(/\$/g,'').replace(/^=/,''):v
-  const satisfied=mode==='clear'?!before:(mode==='set'&&norm(before)===norm(target))
+  const satisfied=mode==='clear'?!before:((mode==='set'&&norm(before)===norm(target))||(mode==='add'&&!!before&&norm(before).split(',').includes(norm(target))))
   if(satisfied)return {ok:true,outcome:'print-area-already-satisfied',source:'live-coedit-editor',noOp:true,applied:false,state:{ref:before},verification:{measurable:true,match:true,expected:target}}
   if(!apply)return {ok:true,outcome:'print-area-observed',source:'live-coedit-editor',noOp:false,applied:false,state:{ref:before},verification:{measurable:true,match:false,expected:target,actual:before}}
   let ranges=null;if(mode!=='clear'){const r=model.getRange2(range);if(!r||!r.bbox)return {ok:false,outcome:'print-area-target-unavailable',source:'live-coedit-editor'};ranges=[r.bbox]}
