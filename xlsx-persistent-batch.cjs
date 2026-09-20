@@ -12,7 +12,8 @@ const definitions=[
  ['defined-name',['set_defined_name','rename_defined_name','delete_defined_name'],'DefinedName','definedNameObserved'],
  ['conditional-format',['add_conditional_format','delete_conditional_format'],'ConditionalFormat','cfObserved'],
  ['pivot',['create_pivot','refresh_pivot','delete_pivot_sheet'],'Pivot','pivotObserved'],
- ['chart',['set_chart','rename_chart','delete_chart'],'Chart','chartObserved']
+ ['chart',['set_chart','rename_chart','delete_chart'],'Chart','chartObserved'],
+ ['page-layout',['set_page_layout'],'PageLayout','pageLayoutObserved']
 ]
 const core={
  file:'core',
@@ -87,6 +88,7 @@ function goalTarget(family,operation){
   return family.file+':'+sheet+':'+range+':'+[value(r.type),value(r.operator),value(r.formula1),value(r.formula2),value(r.priority),fill].join(':')
  }
  if(family.file==='chart')return family.file+':'+sheet+':'+String(operation.name||operation.newName||'').toLowerCase()
+ if(family.file==='page-layout')return family.file+':'+sheet
  return family.file+':'+String(operation.sheet||operation.name).toLowerCase()
 }
 families.push(
