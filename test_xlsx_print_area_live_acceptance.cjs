@@ -1,0 +1,10 @@
+'use strict'
+const assert=require('assert/strict'),persistent=require('./xlsx-persistent-session.cjs'),pa=require('./xlsx-persistent-print-area.cjs')
+const FILE_ID=Number(process.env.EURO_XLSX_PERSISTENT_FILE_ID||1231187)
+process.env.EURO_PLAYWRIGHT_PATH=process.env.EURO_PLAYWRIGHT_PATH||'/home/user/marveen/node_modules/playwright'
+function secret(id){const v=require('/home/user/marveen/dist/web/vault.js');const r=v.getSecret(id,'xlsx-print-area-live');if(!r)throw new Error('vault secret not found: '+id);return r}
+const options={url:process.env.EURO_NEXTCLOUD_URL||'https://mt-server.eu',user:process.env.EURO_NEXTCLOUD_USER||'elliot',pass:secret('Elliot_nc_pass'),fileId:FILE_ID,timeoutMs:30000,pollMs:50}
+async function run(spec){return persistent.withPersistentXlsxSession(options,async api=>{const pre=await pa.immediate(api.session,spec,false);if(pre.ok&&pre.noOp)return {...pre,authority:'LIVE_VERIFY'};const r=await pa.immediate(api.session,spec,true);if(r.ok&&!r.noOp)api.session.markWrite();return {...r,authority:r.ok?'LIVE_VERIFY':'LIVE_READ'}})}
+;(async()=>{const name='EURO PA '+String(Date.now()).slice(-7);const fx=await persistent.withPersistentXlsxSession(options,async api=>{const a=await api.createSheetVerified(name);if(!a.ok)return a;const w=await api.writeRangeVerified({sheet:name,range:'A1:H20',values:Array.from({length:20},(_,r)=>Array.from({length:8},(_,c)=>r*8+c+1)),formulas:Array.from({length:20},()=>Array(8).fill(null))});return w.ok?{ok:true,outcome:'fixture',authority:'LIVE_VERIFY',noOp:false}:w});assert.equal(fx.ok,true)
+ for(const [label,spec,expectNoOp] of [['SET FIRST',{sheet:name,mode:'set',range:'A1:H20'},false],['SET RETRY',{sheet:name,mode:'set',range:'A1:H20'},true],['CLEAR FIRST',{sheet:name,mode:'clear'},false],['CLEAR RETRY',{sheet:name,mode:'clear'},true]]){const r=await run(spec);console.log('PRINT AREA '+label,JSON.stringify(r,null,2));assert.equal(r.ok,true);assert.equal(r.noOp,expectNoOp);if(expectNoOp)assert.equal(r.persistentSession?.writes,0)}
+ console.log('XLSX PRINT AREA LIVE ACCEPTANCE: PASS')})().catch(e=>{console.error(e?.stack||e);process.exitCode=1})
