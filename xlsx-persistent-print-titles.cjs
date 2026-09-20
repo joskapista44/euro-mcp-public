@@ -9,7 +9,7 @@ function command(spec){
   var ws=a&&a.worksheet,po=ws&&ws.PagePrintOptions;if(!a||!ws||!po)return {ok:false,outcome:'print-titles-sheet-or-api-unavailable',source:'live-coedit-editor'}
   function col(n){var s='';while(n>0){n--;s=String.fromCharCode(65+n%26)+s;n=Math.floor(n/26)}return s}
   var want=spec.axis==='rows'?'$'+spec.from+':$'+spec.to:'$'+col(spec.from)+':$'+col(spec.to)
-  function read(){return {rows:po.asc_getPrintTitlesHeight(),columns:po.asc_getPrintTitlesWidth()}}
+  function read(){if(typeof po.initPrintTitles==='function')po.initPrintTitles();return {rows:po.asc_getPrintTitlesHeight(),columns:po.asc_getPrintTitlesWidth()}}
   var before=read(),actual=spec.axis==='rows'?before.rows:before.columns
   if(actual===want)return {ok:true,outcome:'print-titles-already-satisfied',source:'live-coedit-editor',noOp:true,applied:false,state:before,verification:{measurable:true,match:true,expected:want}}
   if(!spec.apply)return {ok:true,outcome:'print-titles-observed',source:'live-coedit-editor',noOp:false,applied:false,state:before,verification:{measurable:true,match:false,expected:want}}
