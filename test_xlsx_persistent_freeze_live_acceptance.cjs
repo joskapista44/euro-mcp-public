@@ -31,5 +31,17 @@ function compact(r){return {ok:r.ok,outcome:r.outcome,authority:r.authority,noOp
   const retry=await freeze.executeFreezeTaskInPersistentSession({fileId:FILE_ID,credentials,timeoutMs:30000,pollMs:50,task:retryTask})
   console.log('FREEZE RETRY',JSON.stringify(compact(retry),null,2))
   assert.equal(retry.ok,true);assert.equal(retry.authority,'LIVE_VERIFY');assert.equal(retry.noOp,true);assert.equal(retry.persistentSession?.writes,0);assert.equal(retry.persistentSession?.persistenceBarrier,null)
-  console.log('XLSX PERSISTENT FREEZE LIVE ACCEPTANCE: PASS')
+  // Multi-sheet discriminator for the full-batch failure: three sequential
+  // FreezeAt operations on three different sheets in ONE editor session.
+  const sheets=[`EURO FRZA ${String(Date.now()).slice(-7)}`,`EURO FRZB ${String(Date.now()).slice(-7)}`,`EURO FRZC ${String(Date.now()).slice(-7)}`]
+  const multi=await persistent.withPersistentXlsxSession(sessionOptions,async api=>{
+    const steps=[]
+    for(const s of sheets){const cr=await api.createSheetVerified(s);if(!cr.ok)return {ok:false,outcome:'freeze-multi-sheet-create-failed',steps};const wr=await api.writeRangeVerified({sheet:s,range:'A1:D5',values:[[1,2,3,4],[5,6,7,8],[9,10,11,12],[13,14,15,16],[17,18,19,20]]});if(!wr.ok)return {ok:false,outcome:'freeze-multi-sheet-write-failed',steps}}
+    const adapter={...api,freezeObserved:async(op,apply)=>{const x=await freeze.runCommand(api.session,op,apply);if(apply&&x?.ok&&x.applied===true)api.session.markWrite();return x}}
+    for(let i=0;i<sheets.length;i++){const r=await agent.executeFreezeTask({task:{operations:[{intent:'freeze_panes',sheet:sheets[i],mode:'at',range:i===0?'A3':'A4'}]},api:adapter});steps.push(r);if(!r.ok)return {ok:false,outcome:'freeze-multi-sheet-step-failed',authority:r.authority||'LIVE_READ',steps}}
+    return {ok:true,outcome:'freeze-multi-sheet-live-verified',authority:'LIVE_VERIFY',steps}
+  })
+  console.log('FREEZE MULTI-SHEET',JSON.stringify(compact(multi),null,2))
+  assert.equal(multi.ok,true);assert.equal(multi.authority,'LIVE_VERIFY');assert.equal(multi.steps.length,3);assert.equal(multi.steps.every(x=>x.ok&&x.authority==='LIVE_VERIFY'),true);assert.equal(multi.persistentSession?.persistenceBarrier?.ok,true)
+    console.log('XLSX PERSISTENT FREEZE LIVE ACCEPTANCE: PASS')
 })().catch(e=>{console.error(e?.stack||e);process.exitCode=1})
