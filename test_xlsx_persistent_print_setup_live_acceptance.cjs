@@ -6,7 +6,7 @@ function secret(id){const v=require('/home/user/marveen/dist/web/vault.js');cons
 const options={url:process.env.EURO_NEXTCLOUD_URL||'https://mt-server.eu',user:process.env.EURO_NEXTCLOUD_USER||'elliot',pass:secret('Elliot_nc_pass'),fileId:FILE_ID,timeoutMs:30000,pollMs:50}
 ;(async()=>{
  const sheet=`EURO PRINTSET ${String(Date.now()).slice(-7)}`
- const fixture=await persistent.withPersistentXlsxSession(options,async api=>{const c=await api.createSheetVerified(sheet);if(!c.ok)return c;const w=await api.writeRangeVerified({sheet,range:'A1:H30',values:Array.from({length:30},(_,r)=>Array.from({length:8},(_,c)=>r===0?'C'+(c+1):(r*10+c))),formulas:Array.from({length:30},()=>Array(8).fill(null))});return w.ok?{ok:true}:w});assert.equal(fixture.ok,true)
+ const fixture=await persistent.withPersistentXlsxSession(options,async api=>{const c=await api.createSheetVerified(sheet);if(!c.ok)return c;const w=await api.writeRangeVerified({sheet,range:'A1:H30',values:Array.from({length:30},(_,r)=>Array.from({length:8},(_,c)=>r===0?'C'+(c+1):(r*10+c))),formulas:Array.from({length:30},()=>Array(8).fill(null))});return w.ok?{ok:true}:w});assert.equal(fixture.ok,true);assert.equal(fixture.persistentSession?.persistenceBarrier?.ok,true)
  for(const [label,op,check] of [
   ['FIT',{intent:'set_print_setup',sheet,mode:'fit_to_pages',fitToWidth:1,fitToHeight:1},s=>s.fitToWidth===1&&s.fitToHeight===1],
   ['SCALE',{intent:'set_print_setup',sheet,mode:'scale',scale:85},s=>Math.abs(s.scale-85)<.01],
