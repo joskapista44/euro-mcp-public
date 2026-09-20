@@ -15,7 +15,8 @@ const definitions=[
  ['chart',['set_chart','rename_chart','delete_chart'],'Chart','chartObserved'],
  ['page-layout',['set_page_layout'],'PageLayout','pageLayoutObserved'],
  ['print-setup',['set_print_setup'],'PrintSetup','printSetupObserved'],
- ['print-titles',['set_print_titles'],'PrintTitles','printTitlesObserved']
+ ['print-titles',['set_print_titles'],'PrintTitles','printTitlesObserved'],
+ ['print-area',['set_print_area'],'PrintArea','printAreaObserved']
 ]
 const core={
  file:'core',
@@ -93,6 +94,7 @@ function goalTarget(family,operation){
  if(family.file==='page-layout')return family.file+':'+sheet
  if(family.file==='print-setup')return family.file+':'+sheet+':'+String(operation.mode||'')
  if(family.file==='print-titles')return family.file+':'+sheet+':'+String(operation.axis||'')
+ if(family.file==='print-area')return family.file+':'+sheet
  return family.file+':'+String(operation.sheet||operation.name).toLowerCase()
 }
 families.push(
