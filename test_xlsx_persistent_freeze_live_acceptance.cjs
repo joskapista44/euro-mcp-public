@@ -49,9 +49,10 @@ function compact(r){return {ok:r.ok,outcome:r.outcome,authority:r.authority,noOp
   const context=await persistent.withPersistentXlsxSession(sessionOptions,async api=>{
     for(const s of [ctxA,ctxB]){const cr=await api.createSheetVerified(s);if(!cr.ok)return cr}
     const wa=await api.writeRangeVerified({sheet:ctxA,range:'A1:D5',values:[[1,2,3,4],[5,6,7,8],[9,10,11,12],[13,14,15,16],[17,18,19,20]]});if(!wa.ok)return wa
-    const rows=[['MONTHLY PLAN VS ACTUAL 2026','','','','','','',''],['','','','','','','',''],['Month','Actual Revenue','Revenue Target','Variance','Attainment','Actual Profit','Profit Target','Profit Variance']]
-    for(let i=1;i<=12;i++)rows.push(['M'+i,i*1000,i*950,'=B'+(i+3)+'-C'+(i+3),'=B'+(i+3)+'/C'+(i+3),i*200,i*180,'=F'+(i+3)+'-G'+(i+3)])
-    const wb=await api.writeRangeVerified({sheet:ctxB,range:'A1:H15',values:rows});if(!wb.ok)return wb
+    const rows=Array.from({length:15},()=>Array(8).fill('')),forms=Array.from({length:15},()=>Array(8).fill(''))
+    rows[0][0]='MONTHLY PLAN VS ACTUAL 2026';['Month','Actual Revenue','Revenue Target','Variance','Attainment','Actual Profit','Profit Target','Profit Variance'].forEach((h,j)=>rows[2][j]=h)
+    for(let i=0;i<12;i++){const row=i+4;rows[row-1][0]='M'+(i+1);rows[row-1][1]=(i+1)*1000;rows[row-1][2]=(i+1)*950;rows[row-1][5]=(i+1)*200;rows[row-1][6]=(i+1)*180;forms[row-1][3]='=B'+row+'-C'+row;forms[row-1][4]='=B'+row+'/C'+row;forms[row-1][7]='=F'+row+'-G'+row}
+    const wb=await api.writeRangeVerified({sheet:ctxB,range:'A1:H15',values:rows,formulas:forms});if(!wb.ok)return {ok:false,outcome:'freeze-monthly-write-failed',authority:wb.authority||'LIVE_READ',written:wb}
     const adapter={...api,freezeObserved:async(op,apply)=>{const x=await freeze.runCommand(api.session,op,apply);if(apply&&x?.ok&&x.applied===true)api.session.markWrite();return x}}
     const a=await agent.executeFreezeTask({task:{operations:[{intent:'freeze_panes',sheet:ctxA,mode:'at',range:'A3'}]},api:adapter});if(!a.ok)return {ok:false,outcome:'freeze-context-first-failed',steps:[a]}
     const b=await agent.executeFreezeTask({task:{operations:[{intent:'freeze_panes',sheet:ctxB,mode:'at',range:'A4'}]},api:adapter});return b.ok?{ok:true,outcome:'freeze-monthly-context-live-verified',authority:'LIVE_VERIFY',steps:[a,b]}:{ok:false,outcome:'freeze-monthly-context-second-failed',authority:b.authority||'LIVE_READ',steps:[a,b]}
