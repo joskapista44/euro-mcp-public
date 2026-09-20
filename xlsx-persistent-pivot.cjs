@@ -11,7 +11,7 @@ async function runCommand(session,spec,apply){
  // returns. Cross one fresh editor-command boundary in the SAME session and
  // perform read-only semantic observation; never sleep or redispatch mutation.
  const observed=await callObserved(session,spec,false)
- if(observed?.ok&&observed?.verification?.measurable===true&&observed?.verification?.match===true&&observed?.noOp===true)return {...observed,outcome:'pivot-live-verified-after-command-boundary',applied:true,mutation:first,postMutationObservation:observed}
+ if(observed?.ok&&observed?.verification?.measurable===true&&observed?.verification?.match===true&&observed?.noOp===true)return {...observed,outcome:'pivot-live-verified-after-command-boundary',noOp:false,applied:true,mutation:first,postMutationObservation:observed}
  // In a large co-edit batch the first read boundary can expose a transient
  // public pivot object whose getters are not hydrated yet (measured as an
  // observer error such as null.map). Cross ONE additional read-only command
@@ -20,7 +20,7 @@ async function runCommand(session,spec,apply){
  const stillAbsent=observed?.ok===true&&observed?.outcome==='pivot-observed'&&observed?.verification?.measurable===true&&observed?.verification?.match===false&&observed?.state?.present===false
  if(transientError||stillAbsent){
   const observed2=await callObserved(session,spec,false)
-  if(observed2?.ok&&observed2?.verification?.measurable===true&&observed2?.verification?.match===true&&observed2?.noOp===true)return {...observed2,outcome:'pivot-live-verified-after-second-command-boundary',applied:true,mutation:first,postMutationObservation:observed,secondPostMutationObservation:observed2}
+  if(observed2?.ok&&observed2?.verification?.measurable===true&&observed2?.verification?.match===true&&observed2?.noOp===true)return {...observed2,outcome:'pivot-live-verified-after-second-command-boundary',noOp:false,applied:true,mutation:first,postMutationObservation:observed,secondPostMutationObservation:observed2}
   return {...first,postMutationObservation:observed,secondPostMutationObservation:observed2}
  }
  return {...first,postMutationObservation:observed}
