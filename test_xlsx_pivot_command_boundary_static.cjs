@@ -34,11 +34,12 @@ function session(results){
  calls=[];bodies=[]
  s=session([
   {ok:false,outcome:'pivot-semantic-mismatch',applied:true,verification:{measurable:true,match:false},state:{present:false}},
+  {ok:true,outcome:'pivot-observed',noOp:false,verification:{measurable:true,match:false},state:{present:false}},
   {ok:true,outcome:'pivot-observed',noOp:false,verification:{measurable:true,match:false},state:{present:false}}
  ])
  r=await pivot.runCommand(s,spec,true)
  assert.equal(r.ok,false);assert.equal(r.outcome,'pivot-semantic-mismatch');assert.equal(calls.length,3)
- assert.equal(r.postMutationObservation.state.present,false);assert.equal(r.secondPostMutationObservation,undefined)
+ assert.equal(r.postMutationObservation.state.present,false);assert.equal(r.secondPostMutationObservation.state.present,false)
 
  calls=[];bodies=[]
  s=session([
