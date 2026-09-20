@@ -43,5 +43,20 @@ function compact(r){return {ok:r.ok,outcome:r.outcome,authority:r.authority,noOp
   })
   console.log('FREEZE MULTI-SHEET',JSON.stringify(compact(multi),null,2))
   assert.equal(multi.ok,true);assert.equal(multi.authority,'LIVE_VERIFY');assert.equal(multi.steps.length,3);assert.equal(multi.steps.every(x=>x.ok&&x.authority==='LIVE_VERIFY'),true);assert.equal(multi.persistentSession?.writes,9);assert.equal(multi.persistentSession?.persistenceBarrier,null)
-    console.log('XLSX PERSISTENT FREEZE LIVE ACCEPTANCE: PASS')
+  // Monthly_Plan-like discriminator: formula-heavy + formatted/layout sheet,
+  // conditional formatting, then sequential freeze after another sheet froze.
+  const ctxA=`EURO FCA ${String(Date.now()).slice(-7)}`,ctxB=`EURO FCB ${String(Date.now()).slice(-7)}`
+  const context=await persistent.withPersistentXlsxSession(sessionOptions,async api=>{
+    for(const s of [ctxA,ctxB]){const cr=await api.createSheetVerified(s);if(!cr.ok)return cr}
+    const wa=await api.writeRangeVerified({sheet:ctxA,range:'A1:D5',values:[[1,2,3,4],[5,6,7,8],[9,10,11,12],[13,14,15,16],[17,18,19,20]]});if(!wa.ok)return wa
+    const rows=[['MONTHLY PLAN VS ACTUAL 2026','','','','','','',''],['','','','','','','',''],['Month','Actual Revenue','Revenue Target','Variance','Attainment','Actual Profit','Profit Target','Profit Variance']]
+    for(let i=1;i<=12;i++)rows.push(['M'+i,i*1000,i*950,'=B'+(i+3)+'-C'+(i+3),'=B'+(i+3)+'/C'+(i+3),i*200,i*180,'=F'+(i+3)+'-G'+(i+3)])
+    const wb=await api.writeRangeVerified({sheet:ctxB,range:'A1:H15',values:rows});if(!wb.ok)return wb
+    const adapter={...api,freezeObserved:async(op,apply)=>{const x=await freeze.runCommand(api.session,op,apply);if(apply&&x?.ok&&x.applied===true)api.session.markWrite();return x}}
+    const a=await agent.executeFreezeTask({task:{operations:[{intent:'freeze_panes',sheet:ctxA,mode:'at',range:'A3'}]},api:adapter});if(!a.ok)return {ok:false,outcome:'freeze-context-first-failed',steps:[a]}
+    const b=await agent.executeFreezeTask({task:{operations:[{intent:'freeze_panes',sheet:ctxB,mode:'at',range:'A4'}]},api:adapter});return b.ok?{ok:true,outcome:'freeze-monthly-context-live-verified',authority:'LIVE_VERIFY',steps:[a,b]}:{ok:false,outcome:'freeze-monthly-context-second-failed',authority:b.authority||'LIVE_READ',steps:[a,b]}
+  })
+  console.log('FREEZE MONTHLY-CONTEXT',JSON.stringify(compact(context),null,2))
+  assert.equal(context.ok,true);assert.equal(context.authority,'LIVE_VERIFY');assert.equal(context.steps.length,2);assert.equal(context.steps.every(x=>x.ok&&x.authority==='LIVE_VERIFY'),true)
+      console.log('XLSX PERSISTENT FREEZE LIVE ACCEPTANCE: PASS')
 })().catch(e=>{console.error(e?.stack||e);process.exitCode=1})
