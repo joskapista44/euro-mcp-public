@@ -41,6 +41,17 @@ function session(results){
  assert.equal(r.postMutationObservation.state.present,false)
 
  calls=[];bodies=[]
+ s=session([
+  {ok:false,outcome:'pivot-semantic-mismatch',applied:true,verification:{measurable:true,match:false},state:{present:false}},
+  {ok:false,outcome:'pivot-operation-error',stage:'init',error:"Cannot read properties of null (reading 'map')"},
+  {ok:true,outcome:'pivot-already-satisfied',noOp:true,verification:{measurable:true,match:true},state:{present:true}}
+ ])
+ r=await pivot.runCommand(s,spec,true)
+ assert.equal(r.ok,true);assert.equal(r.applied,true);assert.equal(r.outcome,'pivot-live-verified-after-second-command-boundary');assert.equal(calls.length,3)
+ assert.match(bodies[1],/"apply":false/);assert.match(bodies[2],/"apply":false/)
+ assert.equal(r.secondPostMutationObservation.state.present,true)
+
+  calls=[];bodies=[]
  s=session([{ok:false,outcome:'pivot-operation-error',applied:false}])
  r=await pivot.runCommand(s,spec,true)
  assert.equal(r.ok,false);assert.equal(calls.length,1)
