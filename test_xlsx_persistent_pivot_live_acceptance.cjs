@@ -45,7 +45,21 @@ function d(r){return {ok:r.ok,outcome:r.outcome,authority:r.authority,noOp:r.noO
  const existingRetry=await persistent.withPersistentXlsxSession(options,api=>pivotAgent.executePivotTask({task:createTask(exSheet,exName,exDest),api:liveApi(api)}));console.log('PIVOT EXISTING-SHEET RETRY',JSON.stringify(d(existingRetry),null,2))
  assert.equal(existingRetry.ok,true);assert.equal(existingRetry.authority,'LIVE_VERIFY');assert.equal(existingRetry.noOp,true);assert.equal(exactCreate(existingRetry,exName),true);assert.equal(existingRetry.persistentSession?.writes,0);assert.equal(existingRetry.persistentSession?.persistenceBarrier,null)
  const existingDeleted=await persistent.withPersistentXlsxSession(options,api=>pivotAgent.executePivotTask({task:deleteTask(exName,exDest),api:liveApi(api)}));assert.equal(existingDeleted.ok,true);assert.equal(existingDeleted.persistentSession?.persistenceBarrier?.ok,true)
-  // Exact exam-order interaction probe: sort + active filter + validation +
+  // Active-sheet negative control: deliberately leave an unrelated sheet active
+ // immediately before existing-sheet pivot creation. The observer must bind
+ // insertion to the requested destination and verify that activation.
+ const acSheet=`EURO_PAC_${suffix}`,acDest=`EURO_PAD_${suffix}`,acOther=`EURO_PAO_${suffix}`,acName=`EURO_PAN_${suffix}`
+ const activeContext=await persistent.withPersistentXlsxSession(options,async api=>{
+  for(const s of [acSheet,acDest,acOther]){const cr=await api.createSheetVerified(s);if(!cr.ok)return cr}
+  const values=[['Region','Style','Price'],['East','A',10],['West','B',20],['East','B',30],['West','A',40]]
+  const w=await api.writeRangeVerified({sheet:acSheet,range:'A1:C5',values});if(!w.ok)return w
+  const activated=await api.session.frame.evaluate(({where,name})=>new Promise(resolve=>{const e=where==='window.editor'?window.editor:(window.Asc||{}).editor;e.callCommand(function(){try{var s=Api.GetSheet(name);if(!s||typeof s.SetActive!=='function')return {ok:false};s.SetActive();var a=Api.GetActiveSheet();return {ok:true,name:a&&a.GetName?a.GetName():null}}catch(err){return {ok:false,error:String(err)}}},false,resolve)}),{where:api.session.apiWhere,name:acOther})
+  if(!activated?.ok||activated.name!==acOther)return {ok:false,outcome:'pivot-active-context-fixture-failed',authority:'LIVE_READ',activated}
+  return pivotAgent.executePivotTask({task:createTask(acSheet,acName,acDest),api:liveApi(api)})
+ });console.log('PIVOT ACTIVE-CONTEXT CREATE TASK',JSON.stringify(d(activeContext),null,2))
+ assert.equal(activeContext.ok,true);assert.equal(activeContext.authority,'LIVE_VERIFY');assert.equal(activeContext.wholeTaskVerification.state.parentSheet,acDest);assert.equal(activeContext.persistentSession?.persistenceBarrier?.ok,true)
+
+ // Exact exam-order interaction probe: sort + active filter + validation +
  // defined-name source identity + conditional formatting all precede pivot.
  // This targets the remaining semantic difference from the 109-op batch.
  const ex2Sheet=`EURO_PFI_${suffix}`,ex2Dest=`EURO_PDI_${suffix}`,ex2Name=`EURO_PII_${suffix}`,ex2Marker=`EURO_PS_${suffix}`
