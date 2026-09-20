@@ -45,5 +45,22 @@ function d(r){return {ok:r.ok,outcome:r.outcome,authority:r.authority,noOp:r.noO
  const existingRetry=await persistent.withPersistentXlsxSession(options,api=>pivotAgent.executePivotTask({task:createTask(exSheet,exName,exDest),api:liveApi(api)}));console.log('PIVOT EXISTING-SHEET RETRY',JSON.stringify(d(existingRetry),null,2))
  assert.equal(existingRetry.ok,true);assert.equal(existingRetry.authority,'LIVE_VERIFY');assert.equal(existingRetry.noOp,true);assert.equal(exactCreate(existingRetry,exName),true);assert.equal(existingRetry.persistentSession?.writes,0);assert.equal(existingRetry.persistentSession?.persistenceBarrier,null)
  const existingDeleted=await persistent.withPersistentXlsxSession(options,api=>pivotAgent.executePivotTask({task:deleteTask(exName,exDest),api:liveApi(api)}));assert.equal(existingDeleted.ok,true);assert.equal(existingDeleted.persistentSession?.persistenceBarrier?.ok,true)
+  // Large-prefix reproduction: the exam failure happens only after substantial
+ // same-session worksheet work. Exercise the same pivot contract after a
+ // deterministic 144-row source plus unrelated verified writes in this session.
+ const pxSheet=`EURO_PFX_${suffix}`,pxDest=`EURO_PFD_${suffix}`,pxName=`EURO_PFP_${suffix}`
+ const prefix=await persistent.withPersistentXlsxSession(options,async api=>{
+  const a=await api.createSheetVerified(pxSheet);if(!a.ok)return a
+  const b=await api.createSheetVerified(pxDest);if(!b.ok)return b
+  const values=[['Month','Region','Country','Product','Units']]
+  const regions=['Northern Europe','Western Europe','Southern Europe','Central Europe'],products=['Atlas Cloud','Orion Analytics','Vertex Security']
+  for(let ri=0;ri<4;ri++)for(let pi=0;pi<3;pi++)for(let mi=0;mi<12;mi++)values.push(['M'+(mi+1),regions[ri],['Sweden','Germany','Italy','Poland'][ri],products[pi],10+ri*7+pi*3+mi])
+  const w=await api.writeRangeVerified({sheet:pxSheet,range:'A1:E145',values});if(!w.ok)return w
+  // Generate substantial same-session activity without changing pivot source semantics.
+  for(let i=0;i<20;i++){const rr=await api.readRange({sheet:pxSheet,range:'A1:E145'});if(!rr.ok)return rr}
+  const assertions=[];for(let ri=0;ri<4;ri++)for(let pi=0;pi<3;pi++){let sum=0;for(let mi=0;mi<12;mi++)sum+=10+ri*7+pi*3+mi;assertions.push({items:[regions[ri],products[pi]],expected:sum})}
+  return pivotAgent.executePivotTask({task:{operations:[{intent:'create_pivot',name:pxName,sourceSheet:pxSheet,sourceRange:'A1:E145',rowField:'Region',columnField:'Product',dataField:'Units',styleName:'PivotStyleMedium2',pivotSheet:pxDest,destinationRange:'A1',repairIncompletePivot:true,assertions}]},api:liveApi(api)})
+ });console.log('PIVOT LARGE-PREFIX CREATE TASK',JSON.stringify(d(prefix),null,2))
+ assert.equal(prefix.ok,true);assert.equal(prefix.authority,'LIVE_VERIFY');assert.equal(prefix.wholeTaskVerification.state.parentSheet,pxDest);assert.equal(prefix.persistentSession?.persistenceBarrier?.ok,true)
   console.log('XLSX PERSISTENT PIVOT LIVE ACCEPTANCE: PASS')
 })().catch(e=>{console.error(e?.stack||e);process.exitCode=1})
