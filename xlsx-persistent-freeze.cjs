@@ -12,6 +12,12 @@ async function runCommand(session,operation,apply){
   if(!apply||first?.ok||first?.applied!==true||first?.outcome!=='freeze-verification-mismatch-or-unavailable')return first
   const observed=await callObserved(session,operation,false)
   if(observed?.ok&&observed?.verification?.measurable===true&&observed?.verification?.match===true&&observed?.noOp===true)return {...observed,outcome:'freeze-live-verified-after-command-boundary',noOp:false,applied:true,mutation:first,postMutationObservation:observed}
+  const stillAbsent=observed?.verification?.measurable===true&&observed?.verification?.match===false&&observed?.verification?.actual===null
+  if(stillAbsent){
+    const observed2=await callObserved(session,operation,false)
+    if(observed2?.ok&&observed2?.verification?.measurable===true&&observed2?.verification?.match===true&&observed2?.noOp===true)return {...observed2,outcome:'freeze-live-verified-after-second-command-boundary',noOp:false,applied:true,mutation:first,postMutationObservation:observed,secondPostMutationObservation:observed2}
+    return {...first,postMutationObservation:observed,secondPostMutationObservation:observed2}
+  }
   return {...first,postMutationObservation:observed}
 }
 async function executeFreezeTaskInPersistentSession(options={}){
