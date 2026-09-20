@@ -16,8 +16,9 @@ async function runCommand(session,spec,apply){
  // public pivot object whose getters are not hydrated yet (measured as an
  // observer error such as null.map). Cross ONE additional read-only command
  // boundary. Never sleep and never redispatch the mutation.
- const transient=observed?.outcome==='pivot-operation-error'||observed?.outcome==='pivot-state-unverifiable'
- if(transient){
+ const transientError=observed?.outcome==='pivot-operation-error'||observed?.outcome==='pivot-state-unverifiable'
+ const stillAbsent=observed?.ok===true&&observed?.outcome==='pivot-observed'&&observed?.verification?.measurable===true&&observed?.verification?.match===false&&observed?.state?.present===false
+ if(transientError||stillAbsent){
   const observed2=await callObserved(session,spec,false)
   if(observed2?.ok&&observed2?.verification?.measurable===true&&observed2?.verification?.match===true&&observed2?.noOp===true)return {...observed2,outcome:'pivot-live-verified-after-second-command-boundary',applied:true,mutation:first,postMutationObservation:observed,secondPostMutationObservation:observed2}
   return {...first,postMutationObservation:observed,secondPostMutationObservation:observed2}
