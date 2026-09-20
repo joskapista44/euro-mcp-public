@@ -42,6 +42,6 @@ function compact(r){return {ok:r.ok,outcome:r.outcome,authority:r.authority,noOp
     return {ok:true,outcome:'freeze-multi-sheet-live-verified',authority:'LIVE_VERIFY',steps}
   })
   console.log('FREEZE MULTI-SHEET',JSON.stringify(compact(multi),null,2))
-  assert.equal(multi.ok,true);assert.equal(multi.authority,'LIVE_VERIFY');assert.equal(multi.steps.length,3);assert.equal(multi.steps.every(x=>x.ok&&x.authority==='LIVE_VERIFY'),true);assert.equal(multi.persistentSession?.persistenceBarrier?.ok,true)
+  assert.equal(multi.ok,true);assert.equal(multi.authority,'LIVE_VERIFY');assert.equal(multi.steps.length,3);assert.equal(multi.steps.every(x=>x.ok&&x.authority==='LIVE_VERIFY'),true);assert.equal(multi.persistentSession?.writes,9);assert.equal(multi.persistentSession?.persistenceBarrier,null)
     console.log('XLSX PERSISTENT FREEZE LIVE ACCEPTANCE: PASS')
 })().catch(e=>{console.error(e?.stack||e);process.exitCode=1})
