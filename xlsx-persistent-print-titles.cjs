@@ -8,7 +8,7 @@ function command(spec){
   var sheets=Api.GetSheets(),a=null;for(var i=0;i<sheets.length;i++)if(sheets[i]&&sheets[i].GetName&&sheets[i].GetName()===spec.sheet){a=sheets[i];break}
   var ws=a&&a.worksheet,po=ws&&ws.PagePrintOptions;if(!a||!ws||!po)return {ok:false,outcome:'print-titles-sheet-or-api-unavailable',source:'live-coedit-editor'}
   var want=spec.axis==='rows'?'$'+spec.from+':$'+spec.to:'$'+col(spec.from)+':$'+col(spec.to)
-  function read(){if(typeof po.initPrintTitles==='function')po.initPrintTitles();var d=null,ref=null;try{d=Api.GetDefName('Print_Titles');ref=d&&d.GetRefersTo?d.GetRefersTo():null}catch(_){};if(ref){var marker="='"+escSheet(spec.sheet)+"'!";if(ref.indexOf(marker)!==0)ref=null}
+  function read(){if(typeof po.initPrintTitles==='function')po.initPrintTitles();var d=null,ref=null;try{d=ws.workbook.getDefinesNames('Print_Titles',ws.getId(),true);ref=d&&d.ref||null}catch(_){};if(ref){var marker="='"+escSheet(spec.sheet)+"'!";if(ref.indexOf(marker)!==0)ref=null}
    return {rows:po.asc_getPrintTitlesHeight(),columns:po.asc_getPrintTitlesWidth(),definedName:ref}}
   function desiredRef(state){var rows=spec.axis==='rows'?want:state.rows,cols=spec.axis==='columns'?want:state.columns,parts=[];if(cols)parts.push("='"+escSheet(spec.sheet)+"'!"+cols);if(rows)parts.push("='"+escSheet(spec.sheet)+"'!"+rows);return parts.join(',')}
   var before=read(),actual=spec.axis==='rows'?before.rows:before.columns,wantRef=desiredRef(before)
@@ -16,10 +16,10 @@ function command(spec){
   var persistedSatisfied=actual===want&&!!before.definedName
   if(persistedSatisfied)return {ok:true,outcome:'print-titles-already-satisfied',source:'live-coedit-editor',noOp:true,applied:false,state:before,verification:{measurable:true,match:true,expected:want,expectedRef:wantRef}}
   if(!spec.apply)return {ok:true,outcome:'print-titles-observed',source:'live-coedit-editor',noOp:false,applied:false,state:before,diagnostic:{actual:actual,want:want,definedName:before.definedName,wantRef:wantRef,persistedSatisfied:persistedSatisfied,actualType:typeof actual,wantType:typeof want,actualJson:JSON.stringify(actual),wantJson:JSON.stringify(want)},verification:{measurable:true,match:false,expected:want,expectedRef:wantRef}}
-  var d=null;try{d=Api.GetDefName('Print_Titles')}catch(_){};var existingRef=d&&d.GetRefersTo?d.GetRefersTo():null;var localMarker="='"+escSheet(spec.sheet)+"'!";if(existingRef&&existingRef.indexOf(localMarker)!==0)d=null
-  if(d&&typeof d.SetRefersTo==='function')d.SetRefersTo(wantRef);else if(typeof Api.AddDefName==='function')Api.AddDefName('Print_Titles',wantRef);else return {ok:false,outcome:'print-titles-defined-name-api-unavailable',source:'live-coedit-editor'}
+  var d=null;try{d=ws.workbook.getDefinesNames('Print_Titles',ws.getId(),true)}catch(_){}
+  if(d&&d.ref===wantRef){}else if(d){var edited=ws.workbook.editDefinesNames({name:'Print_Titles',ref:d.ref,sheetId:ws.getId()},{name:'Print_Titles',ref:wantRef,sheetId:ws.getId()});if(edited===false)return {ok:false,outcome:'print-titles-local-defined-name-edit-failed',source:'live-coedit-editor'}}else{var added=ws.workbook.addDefName('Print_Titles',wantRef,ws.getId(),false,false);if(!added)return {ok:false,outcome:'print-titles-local-defined-name-add-failed',source:'live-coedit-editor'}}
   if(spec.axis==='rows')po.asc_setPrintTitlesHeight(want);else po.asc_setPrintTitlesWidth(want)
-  var state={rows:po.asc_getPrintTitlesHeight(),columns:po.asc_getPrintTitlesWidth(),definedName:null};try{var dn=Api.GetDefName('Print_Titles');state.definedName=dn&&dn.GetRefersTo?dn.GetRefersTo():null}catch(_){}
+  var state={rows:po.asc_getPrintTitlesHeight(),columns:po.asc_getPrintTitlesWidth(),definedName:null};try{var dn=ws.workbook.getDefinesNames('Print_Titles',ws.getId(),true);state.definedName=dn&&dn.ref||null}catch(_){}
   var now=spec.axis==='rows'?state.rows:state.columns,ok=now===want&&normRef(state.definedName)===normRef(wantRef)
   return {ok:ok,outcome:ok?'print-titles-applied':'print-titles-semantic-mismatch',source:'live-coedit-editor',noOp:false,applied:true,state:state,verification:{measurable:true,match:ok,expected:want,expectedRef:wantRef}}
  }catch(err){return {ok:false,outcome:'print-titles-error',source:'live-coedit-editor',error:String(err&&err.message||err)}}
