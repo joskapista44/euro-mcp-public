@@ -7,7 +7,7 @@ function command(spec){
   var sheets=Api.GetSheets(),a=null,idx=-1;for(var i=0;i<sheets.length;i++)if(sheets[i]&&sheets[i].GetName&&sheets[i].GetName()===spec.sheet){a=sheets[i];idx=i;break}
   if(!a||idx<0)return {ok:false,outcome:'print-titles-sheet-unavailable',source:'live-coedit-editor'}
   var want=spec.axis==='rows'?'$'+spec.from+':$'+spec.to:'$'+col(spec.from)+':$'+col(spec.to)
-  var editor=window.Asc&&window.Asc.editor;if(!editor||typeof editor.asc_getPageOptions!=='function'||typeof editor.asc_changePrintTitles!=='function')return {ok:false,outcome:'print-titles-editor-api-unavailable',source:'live-coedit-editor'}
+  var editor=null;try{editor=(typeof Asc!=='undefined'&&Asc.editor)||null}catch(_){};if(!editor)try{editor=window.Asc&&window.Asc.editor||null}catch(_){};if(!editor||typeof editor.asc_getPageOptions!=='function'||typeof editor.asc_changePrintTitles!=='function')return {ok:false,outcome:'print-titles-editor-api-unavailable',source:'live-coedit-editor'}
   function read(){var po=editor.asc_getPageOptions(idx,true,false);return {rows:po&&po.asc_getPrintTitlesHeight?po.asc_getPrintTitlesHeight():po&&po.printTitlesHeight||null,columns:po&&po.asc_getPrintTitlesWidth?po.asc_getPrintTitlesWidth():po&&po.printTitlesWidth||null}}
   var before=read(),actual=spec.axis==='rows'?before.rows:before.columns
   if(actual===want)return {ok:true,outcome:'print-titles-already-satisfied',source:'live-coedit-editor',noOp:true,applied:false,state:before,verification:{measurable:true,match:true,expected:want}}
