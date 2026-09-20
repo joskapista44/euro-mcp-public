@@ -40,6 +40,19 @@ function coreFinalOperations(operations,tail){
     if(write.formulas)write.formulas[r-wr.start.row][c-wr.start.column]=null
    }
   }
+  // A later sort changes the final row order of an earlier core write. Do not
+  // verify/retry against the pre-sort matrix. Project the deterministic sort
+  // into the core write's expected final state when the sort range is fully
+  // contained in that write and uses a single-column key.
+  for(const sort of tail.filter(op=>op?.intent==='sort_range'&&op.sheet===sheet)){
+   const sr=parseA1Range(sort.range),kr=parseA1Range(sort.keyRange);if(!sr||!kr||sr.start.row<wr.start.row||sr.end.row>wr.end.row||sr.start.column<wr.start.column||sr.end.column>wr.end.column)continue
+   const from=sr.start.row-wr.start.row,to=sr.end.row-wr.start.row,key=kr.start.column-wr.start.column,header=sort.hasHeaders!==false?1:0
+   const start=from+header,rows=[]
+   for(let r=start;r<=to;r++)rows.push({values:write.values[r],formulas:write.formulas?write.formulas[r]:null})
+   const cell=x=>{const f=x.formulas?.[key];return f!=null?f:x.values?.[key]}
+   rows.sort((a,b)=>{const av=cell(a),bv=cell(b);if(av==null&&bv==null)return 0;if(av==null)return 1;if(bv==null)return -1;const an=Number(av),bn=Number(bv),cmp=Number.isFinite(an)&&Number.isFinite(bn)?an-bn:String(av).localeCompare(String(bv));return sort.order==='desc'?-cmp:cmp})
+   rows.forEach((row,i)=>{write.values[start+i]=row.values;if(write.formulas)write.formulas[start+i]=row.formulas})
+  }
  }
  return final
 }
