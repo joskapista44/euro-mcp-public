@@ -16,7 +16,8 @@ const definitions=[
  ['page-layout',['set_page_layout'],'PageLayout','pageLayoutObserved'],
  ['print-setup',['set_print_setup'],'PrintSetup','printSetupObserved'],
  ['print-titles',['set_print_titles'],'PrintTitles','printTitlesObserved'],
- ['print-area',['set_print_area'],'PrintArea','printAreaObserved']
+ ['print-area',['set_print_area'],'PrintArea','printAreaObserved'],
+ ['header-footer',['set_header_footer'],'HeaderFooter','headerFooterObserved']
 ]
 const core={
  file:'core',
@@ -95,6 +96,7 @@ function goalTarget(family,operation){
  if(family.file==='print-setup')return family.file+':'+sheet+':'+String(operation.mode||'')
  if(family.file==='print-titles')return family.file+':'+sheet+':'+String(operation.axis||'')
  if(family.file==='print-area')return family.file+':'+sheet
+ if(family.file==='header-footer')return family.file+':'+sheet+':'+String(operation.slot||'')
  return family.file+':'+String(operation.sheet||operation.name).toLowerCase()
 }
 families.push(
