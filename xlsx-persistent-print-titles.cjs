@@ -3,25 +3,20 @@ const LIVE='live-coedit-editor'
 function validSpec(s){return s&&typeof s.sheet==='string'&&s.sheet.trim()&&['rows','columns'].includes(s.axis)&&Number.isInteger(s.from)&&s.from>=1&&Number.isInteger(s.to)&&s.to>=s.from}
 function command(spec){
  function col(n){var s='';while(n>0){n--;s=String.fromCharCode(65+n%26)+s;n=Math.floor(n/26)}return s}
- function escSheet(n){return String(n).replace(/'/g,"''")}
  try{
-  var sheets=Api.GetSheets(),a=null;for(var i=0;i<sheets.length;i++)if(sheets[i]&&sheets[i].GetName&&sheets[i].GetName()===spec.sheet){a=sheets[i];break}
-  var ws=a&&a.worksheet,po=ws&&ws.PagePrintOptions;if(!a||!ws||!po)return {ok:false,outcome:'print-titles-sheet-or-api-unavailable',source:'live-coedit-editor'}
+  var sheets=Api.GetSheets(),a=null,idx=-1;for(var i=0;i<sheets.length;i++)if(sheets[i]&&sheets[i].GetName&&sheets[i].GetName()===spec.sheet){a=sheets[i];idx=i;break}
+  if(!a||idx<0)return {ok:false,outcome:'print-titles-sheet-unavailable',source:'live-coedit-editor'}
   var want=spec.axis==='rows'?'$'+spec.from+':$'+spec.to:'$'+col(spec.from)+':$'+col(spec.to)
-  function read(){if(typeof po.initPrintTitles==='function')po.initPrintTitles();var d=null,ref=null;try{d=ws.workbook.getDefinesNames('Print_Titles',ws.getId(),true);ref=d&&d.ref||null}catch(_){};if(ref){var marker="='"+escSheet(spec.sheet)+"'!";if(ref.indexOf(marker)!==0)ref=null}
-   return {rows:po.asc_getPrintTitlesHeight(),columns:po.asc_getPrintTitlesWidth(),definedName:ref}}
-  function desiredRef(state){var rows=spec.axis==='rows'?want:state.rows,cols=spec.axis==='columns'?want:state.columns,parts=[];if(cols)parts.push("='"+escSheet(spec.sheet)+"'!"+cols);if(rows)parts.push("='"+escSheet(spec.sheet)+"'!"+rows);return parts.join(',')}
-  var before=read(),actual=spec.axis==='rows'?before.rows:before.columns,wantRef=desiredRef(before)
-  function normRef(x){return String(x||'').replace(/^=/,'').split(',').map(function(p){return p.replace(/\$/g,'').replace(/'/g,'').replace(/\s+/g,'')}).sort().join(',')}
-  var persistedSatisfied=actual===want&&!!before.definedName
-  if(persistedSatisfied)return {ok:true,outcome:'print-titles-already-satisfied',source:'live-coedit-editor',noOp:true,applied:false,state:before,verification:{measurable:true,match:true,expected:want,expectedRef:wantRef}}
-  if(!spec.apply)return {ok:true,outcome:'print-titles-observed',source:'live-coedit-editor',noOp:false,applied:false,state:before,diagnostic:{actual:actual,want:want,definedName:before.definedName,wantRef:wantRef,persistedSatisfied:persistedSatisfied,actualType:typeof actual,wantType:typeof want,actualJson:JSON.stringify(actual),wantJson:JSON.stringify(want)},verification:{measurable:true,match:false,expected:want,expectedRef:wantRef}}
-  var d=null;try{d=ws.workbook.getDefinesNames('Print_Titles',ws.getId(),true)}catch(_){}
-  if(d&&d.ref===wantRef){}else if(d){var edited=ws.workbook.editDefinesNames({name:'Print_Titles',ref:d.ref,sheetId:ws.getId()},{name:'Print_Titles',ref:wantRef,sheetId:ws.getId()});if(edited===false)return {ok:false,outcome:'print-titles-local-defined-name-edit-failed',source:'live-coedit-editor'}}else{var added=ws.workbook.addDefName('Print_Titles',wantRef,ws.getId(),false,false);if(!added)return {ok:false,outcome:'print-titles-local-defined-name-add-failed',source:'live-coedit-editor'}}
-  if(spec.axis==='rows')po.asc_setPrintTitlesHeight(want);else po.asc_setPrintTitlesWidth(want)
-  var state={rows:po.asc_getPrintTitlesHeight(),columns:po.asc_getPrintTitlesWidth(),definedName:null};try{var dn=ws.workbook.getDefinesNames('Print_Titles',ws.getId(),true);state.definedName=dn&&dn.ref||null}catch(_){}
-  var now=spec.axis==='rows'?state.rows:state.columns,ok=now===want&&normRef(state.definedName)===normRef(wantRef)
-  return {ok:ok,outcome:ok?'print-titles-applied':'print-titles-semantic-mismatch',source:'live-coedit-editor',noOp:false,applied:true,state:state,verification:{measurable:true,match:ok,expected:want,expectedRef:wantRef}}
+  var editor=window.Asc&&window.Asc.editor;if(!editor||typeof editor.asc_getPageOptions!=='function'||typeof editor.asc_changePrintTitles!=='function')return {ok:false,outcome:'print-titles-editor-api-unavailable',source:'live-coedit-editor'}
+  function read(){var po=editor.asc_getPageOptions(idx,true,false);return {rows:po&&po.asc_getPrintTitlesHeight?po.asc_getPrintTitlesHeight():po&&po.printTitlesHeight||null,columns:po&&po.asc_getPrintTitlesWidth?po.asc_getPrintTitlesWidth():po&&po.printTitlesWidth||null}}
+  var before=read(),actual=spec.axis==='rows'?before.rows:before.columns
+  if(actual===want)return {ok:true,outcome:'print-titles-already-satisfied',source:'live-coedit-editor',noOp:true,applied:false,state:before,verification:{measurable:true,match:true,expected:want}}
+  if(!spec.apply)return {ok:true,outcome:'print-titles-observed',source:'live-coedit-editor',noOp:false,applied:false,state:before,verification:{measurable:true,match:false,expected:want,actual:actual}}
+  var cols=spec.axis==='columns'?want:before.columns,rows=spec.axis==='rows'?want:before.rows
+  var ret=editor.asc_changePrintTitles(cols,rows,idx)
+  if(ret===false)return {ok:false,outcome:'print-titles-editor-mutation-rejected',source:'live-coedit-editor'}
+  var state=read(),now=spec.axis==='rows'?state.rows:state.columns,ok=now===want
+  return {ok:ok,outcome:ok?'print-titles-applied':'print-titles-semantic-mismatch',source:'live-coedit-editor',noOp:false,applied:true,state:state,verification:{measurable:true,match:ok,expected:want,actual:now}}
  }catch(err){return {ok:false,outcome:'print-titles-error',source:'live-coedit-editor',error:String(err&&err.message||err)}}
 }
 async function immediate(session,spec,apply){if(!validSpec(spec))return {ok:false,outcome:'print-titles-invalid-spec',source:LIVE};const body=`return (${command.toString()})(${JSON.stringify({...spec,apply:!!apply})});`;return session.frame.evaluate(({where,body})=>new Promise(resolve=>{const e=where==='window.editor'?window.editor:(window.Asc||{}).editor;e.callCommand(new Function(body),false,resolve)}),{where:session.apiWhere,body})}
