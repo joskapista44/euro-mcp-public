@@ -10,15 +10,19 @@ async function callObserved(session,operation,apply){
 async function runCommand(session,operation,apply){
   const first=await callObserved(session,operation,apply)
   if(!apply||first?.ok||first?.applied!==true||first?.outcome!=='freeze-verification-mismatch-or-unavailable')return first
-  const observed=await callObserved(session,operation,false)
-  if(observed?.ok&&observed?.verification?.measurable===true&&observed?.verification?.match===true&&observed?.noOp===true)return {...observed,outcome:'freeze-live-verified-after-command-boundary',noOp:false,applied:true,mutation:first,postMutationObservation:observed}
-  const stillAbsent=observed?.verification?.measurable===true&&observed?.verification?.match===false&&observed?.verification?.actual===null
-  if(stillAbsent){
-    const observed2=await callObserved(session,operation,false)
-    if(observed2?.ok&&observed2?.verification?.measurable===true&&observed2?.verification?.match===true&&observed2?.noOp===true)return {...observed2,outcome:'freeze-live-verified-after-second-command-boundary',noOp:false,applied:true,mutation:first,postMutationObservation:observed,secondPostMutationObservation:observed2}
-    return {...first,postMutationObservation:observed,secondPostMutationObservation:observed2}
-  }
-  return {...first,postMutationObservation:observed}
+  // Freeze view state is eventually visible in the deployed co-edit runtime.
+  // Poll only the semantic postcondition on fresh read-only command boundaries;
+  // never redispatch FreezeAt and never accept anything short of exact bbox match.
+  const observations=[]
+  const deadline=Date.now()+1000
+  do{
+    const observed=await callObserved(session,operation,false);observations.push(observed)
+    if(observed?.ok&&observed?.verification?.measurable===true&&observed?.verification?.match===true&&observed?.noOp===true)return {...observed,outcome:'freeze-live-verified-after-postcondition-poll',noOp:false,applied:true,mutation:first,postMutationObservations:observations}
+    const retryable=observed?.verification?.measurable===true&&observed?.verification?.match===false&&observed?.verification?.actual===null
+    if(!retryable)break
+    if(Date.now()<deadline)await new Promise(r=>setTimeout(r,25))
+  }while(Date.now()<deadline)
+  return {...first,postMutationObservations:observations}
 }
 async function executeFreezeTaskInPersistentSession(options={}){
   const sessionOptions=optionsOf(options)
