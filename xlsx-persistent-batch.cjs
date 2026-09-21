@@ -195,7 +195,9 @@ async function executeBatchTask({task,api}){
  for(const step of plan.steps){
   const f=step.family==='core'?core:families.find(f=>f.file===step.family)
   const operations=step.verifyOperations||step.operations||[step.operation]
-  const result=await f.agent[f.execute]({task:{operations},api:step.family==='core'?coreAdapter(api,true):adapter(api,f,true)})
+  let verifyOperations=operations
+  if(step.family==='range-move'){const applied=steps.find(s=>s.index===step.index&&s.intent==='move_range')?.result;if(applied?.retryToken)verifyOperations=[{...operations[0],retryToken:applied.retryToken}]}
+  const result=await f.agent[f.execute]({task:{operations:verifyOperations},api:step.family==='core'?coreAdapter(api,true):adapter(api,f,true)})
   const ok=result.ok&&result.authority==='LIVE_VERIFY'&&result.noOp===true
   for(const op of operations)checks.push({index:op.index,intent:op.intent,ok})
   if(!ok)return {ok:false,outcome:'xlsx-batch-whole-verify-failed',authority:'PRIMITIVE_LIVE_VERIFY_ONLY',writeAllowed:false,steps,checks,failed:result}
