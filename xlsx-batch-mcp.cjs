@@ -13,7 +13,7 @@ const operation=z.object({
  intent:z.enum(['create_sheet','write_range','copy_sheet','rename_sheet','delete_sheet','move_sheet','clear_range','format_range','layout_range','merge_range','unmerge_range','freeze_panes','unfreeze_panes','sort_range','filter_range','clear_filter','set_validation','clear_validation','set_defined_name','rename_defined_name','delete_defined_name','add_conditional_format','delete_conditional_format','create_pivot','refresh_pivot','delete_pivot_sheet','set_chart','rename_chart','delete_chart','set_page_layout','set_print_setup','set_print_titles','set_print_area','set_header_footer','set_page_break','set_first_page_number','copy_range','move_range','insert_rows','delete_rows','insert_columns','delete_columns']),
  sheet:str.optional(),range:str.optional(),targetSheet:str.optional(),targetRange:str.optional(),format:z.record(z.string(),z.unknown()).optional(),
  values:z.array(z.array(z.union([scalar,z.null()]))).optional(),formulas:z.array(z.array(z.string().nullable())).optional(),
- type:z.enum(['column.width','row.height','columns.hidden','rows.hidden']).optional(),
+ type:z.enum(['column.width','row.height','columns.hidden','rows.hidden','columns.autofit','rows.autofit']).optional(),
  width:z.number().positive().optional(),height:z.number().positive().optional(),hidden:z.boolean().optional(),
  mode:z.enum(['rows','columns','at','fit_to_pages','scale','page_size','add','remove','reset']).optional(),count:z.number().int().positive().optional(),
  referenceSheet:str.optional(),position:z.enum(['before','after']).optional(),
