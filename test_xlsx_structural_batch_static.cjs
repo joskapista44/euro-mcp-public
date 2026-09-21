@@ -5,4 +5,5 @@ for(const [intent,range] of [['insert_rows','A2:A3'],['delete_rows','A2'],['inse
 }
 assert.equal(batch.planTask({operations:[{intent:'insert_rows',sheet:'S',range:'B2'}]}).ok,false)
 assert.equal(batch.planTask({operations:[{intent:'insert_columns',sheet:'S',range:'B2'}]}).ok,false)
+const normalized=batch.planTask({operations:[{intent:'insert_rows',sheet:'S',range:'A2'}]}).steps[0].operation;assert.equal(normalized.preconditionFingerprint,null);assert.equal(normalized.expectedPostFingerprint,null)
 console.log('XLSX STRUCTURAL BATCH STATIC: PASS')
