@@ -247,7 +247,7 @@ async function executeBatchTask({task,api}){
   // A receipt marks a replay after an operation-bound transformation. Initial
   // execution must expose the original core state to those dependent steps;
   // replay dispatches the projected state to preserve zero-write idempotence.
-  const hasRetryReceipt=task.operations.some(op=>typeof op?.retryToken==='string'&&op.retryToken.length>0)
+  const hasRetryReceipt=plan.steps.some(s=>['structural','range-move'].includes(s.family)&&s.operation?.retryToken!=null)
   let operations=step.family==='core'&&step.receiptBoundReplay&&!hasRetryReceipt
    ?step.operations
    :step.verifyOperations||step.operations||[step.operation]

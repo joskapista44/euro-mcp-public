@@ -23,6 +23,13 @@ assert.equal(mcp.schema.safeParse({file_id:'123',operations:publicOperations,rea
 assert.equal(batch.planTask({operations:mcp.normalizeOperations(publicOperations),readbacks:task.readbacks}).ok,true)
 const receipt={steps:[{index:7,intent:'insert_rows',result:{retryToken:'structural-token'}},{index:11,intent:'move_range',result:{retryToken:'move-token'}},{index:14,intent:'layout_range',result:{retryToken:'autofit-token'}}]}
 const retry=withRetryReceipts(task,receipt)
+const acceptance=require('./test_xlsx_cross_family_agent_task_live_acceptance.cjs')
+acceptance.assertRetryReceipts(task,{steps:[{index:13,intent:'layout_range',result:{}},...receipt.steps]})
+assert.throws(()=>acceptance.assertRetryReceipts(task,{steps:receipt.steps.filter(step=>step.index!==14)}),/index 14/)
+acceptance.assertBlank({dataType:'blank',rawValue:'',value:'',formula:null})
+acceptance.assertBlank({dataType:'blank',rawValue:null,value:null,formula:null})
+assert.throws(()=>acceptance.assertBlank(null))
+assert.throws(()=>acceptance.assertBlank({dataType:'string',rawValue:'unexpected'}))
 assert.equal(retry.operations.find(op=>op.intent==='insert_rows').retryToken,'structural-token')
 assert.equal(retry.operations.find(op=>op.intent==='move_range').retryToken,'move-token')
 assert.equal(retry.operations.find(op=>op.type==='columns.autofit').retryToken,'autofit-token')

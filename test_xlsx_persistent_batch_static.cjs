@@ -74,7 +74,8 @@ const cf=require('./xlsx-persistent-conditional-format.cjs')
  try{
   const dependentTask={operations:[{intent:'create_sheet',name:'D'},{intent:'write_range',sheet:'D',range:'A1:B1',values:[['source',1]]},moveOp]}
   const first=await batch.executeBatchTask({task:dependentTask,api:{}});assert.equal(first.ok,true);assert.deepEqual(dependentSeen,['source',null])
-  const retryTask={operations:dependentTask.operations.map((op,index)=>index===2?{...op,retryToken:moveToken}:op)}
+  // A reopened caller reconstructs the task; do not reuse potentially mutated matrices.
+  const retryTask={operations:[{intent:'create_sheet',name:'D'},{intent:'write_range',sheet:'D',range:'A1:B1',values:[['source',1]]},{...moveOp,retryToken:moveToken}]}
   const retry=await batch.executeBatchTask({task:retryTask,api:{}});assert.equal(retry.ok,true);assert.equal(retry.noOp,true);assert.deepEqual(dependentSeen,['source',null,null,null])
  }finally{coreAgent.executeTask=originalCoreExecute;moveAgent.executeRangeMoveTask=originalMoveExecute}
  const layoutAgent=require('./xlsx-agent-layout-task.cjs'),autoFitRetry=require('./xlsx-layout-autofit-retry-token.cjs'),originalLayoutExecute=layoutAgent.executeLayoutTask
