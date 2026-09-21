@@ -255,6 +255,10 @@ async function executeBatchTask({task,api}){
   const result=step.family==='structural'
    ?await f.persistent[f.execute](api.session,api,{operations})
    :await f.agent[f.execute]({task:{operations},api:step.family==='core'?coreAdapter(api,false):adapter(api,f,false)})
+  if(step.family==='structural'&&result?.ok&&process.env.EURO_XLSX_STRUCTURAL_BATCH_DEBUG==='1'){
+   const op=operations[0],sr=parseA1Range(op.range),sheet=op.sheet
+   if(sr&&op.intent==='insert_rows')result.batchDebug={top:await api.readRange({sheet,range:'A1:C1'}),inserted:await api.readRange({sheet,range:'A2:C2'}),bottom:await api.readRange({sheet,range:'A3:C5'})}
+  }
   steps.push({index:step.index,intent:step.family==='core'?'core_task':step.operation.intent,result})
   if(!result.ok||result.authority!=='LIVE_VERIFY')return {ok:false,outcome:'xlsx-batch-step-failed',authority:'LIVE_READ',writeAllowed:false,steps}
  }
