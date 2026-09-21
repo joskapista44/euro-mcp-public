@@ -204,6 +204,12 @@ async function executeBatchTask({task,api}){
   // the same cells makes the intermediate values dead writes on both apply
   // and retry, so they must never be dispatched.
   let operations=step.verifyOperations||step.operations||[step.operation]
+  // Structural standalone tasks intentionally accept a missing precondition and
+  // derive the before/post proof from the owning LIVE session. Batch operations
+  // are normalized by planTask, where absent optional fingerprints are null;
+  // strip those null optionals before handing the operation back to the strict
+  // structural task planner (undefined = omitted, null = invalid supplied value).
+  if(step.family==='structural')operations=operations.map(op=>{const x={...op};if(x.preconditionFingerprint==null)delete x.preconditionFingerprint;if(x.expectedPostFingerprint==null)delete x.expectedPostFingerprint;if(x.retryToken==null)delete x.retryToken;return x})
   // Range-move retry idempotence is handled by the move family itself. The
   // batch must not synthesize a retry token from only the current post-state;
   // that cannot reconstruct the operation-bound before/after proof.
