@@ -224,6 +224,7 @@ async function executeBatchTask({task,api}){
   const operations=step.verifyOperations||step.operations||[step.operation]
   let verifyOperations=operations
   if(step.family==='range-move'){const applied=steps.find(s=>s.index===step.index&&s.intent==='move_range')?.result;if(applied?.retryToken)verifyOperations=[{...operations[0],retryToken:applied.retryToken}]}
+  if(step.family==='structural'){const applied=steps.find(s=>s.index===step.index&&s.intent===step.operation.intent)?.result;if(applied?.retryToken)verifyOperations=[{...operations[0],retryToken:applied.retryToken}]}
   const result=step.family==='structural'
    ?await f.persistent[f.execute](api.session,api,{operations:verifyOperations})
    :await f.agent[f.execute]({task:{operations:verifyOperations},api:step.family==='core'?coreAdapter(api,true):adapter(api,f,true)})
