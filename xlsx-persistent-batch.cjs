@@ -201,7 +201,17 @@ async function executeBatchTask({task,api}){
   // Core writes are projected to the requested final state. A later clear of
   // the same cells makes the intermediate values dead writes on both apply
   // and retry, so they must never be dispatched.
-  const operations=step.verifyOperations||step.operations||[step.operation]
+  let operations=step.verifyOperations||step.operations||[step.operation]
+  // A destructive move is satisfied on a reopened task by the destination
+  // plus the consumed source. Derive the same operation-bound retry token used
+  // by the standalone move acceptance from live pre-state before dispatch, so
+  // the move executor can prove no-op instead of re-moving an already-consumed
+  // source. On the first invocation the source is still populated, so this
+  // token does not suppress the required mutation.
+  if(step.family==='range-move'){
+   const op=operations[0],src=await api.readRange(op.sheet,op.range),dst=await api.readRange(op.targetSheet,op.targetRange)
+   if(src?.ok&&dst?.ok)operations=[{...op,retryToken:{source:{sheet:op.sheet,range:op.range,values:src.values,formulas:src.formulas},target:{sheet:op.targetSheet,range:op.targetRange,values:dst.values,formulas:dst.formulas}}}]
+  }
   const result=await f.agent[f.execute]({task:{operations},api:step.family==='core'?coreAdapter(api,false):adapter(api,f,false)})
   steps.push({index:step.index,intent:step.family==='core'?'core_task':step.operation.intent,result})
   if(!result.ok||result.authority!=='LIVE_VERIFY')return {ok:false,outcome:'xlsx-batch-step-failed',authority:'LIVE_READ',writeAllowed:false,steps}
