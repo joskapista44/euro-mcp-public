@@ -47,6 +47,15 @@ function coreFinalOperations(operations,tail){
     if(write.formulas)write.formulas[r-wr.start.row][c-wr.start.column]=null
    }
   }
+  // A later range move consumes the source cells. Project that destructive
+  // final state into earlier core writes so whole-task verification checks the
+  // requested final workbook rather than the pre-move intermediate state.
+  for(const move of tail.filter(op=>op?.intent==='move_range'&&op.sheet===sheet)){
+   const mr=parseA1Range(move.range);if(!mr)continue
+   const r0=Math.max(wr.start.row,mr.start.row),r1=Math.min(wr.end.row,mr.end.row),c0=Math.max(wr.start.column,mr.start.column),c1=Math.min(wr.end.column,mr.end.column)
+   if(r0>r1||c0>c1)continue
+   for(let r=r0;r<=r1;r++)for(let c=c0;c<=c1;c++){write.values[r-wr.start.row][c-wr.start.column]=null;if(write.formulas)write.formulas[r-wr.start.row][c-wr.start.column]=null}
+  }
   // A later sort changes the final row order of an earlier core write. Do not
   // verify/retry against the pre-sort matrix. Project the deterministic sort
   // into the core write's expected final state when the sort range is fully
