@@ -129,7 +129,12 @@ function planTask(task){
   const planned=core.agent.planTask({operations:task.operations.slice(0,coreCount)})
   if(!planned.ok)return planned
   const creationFirst=creationFirstCoreOperations(planned.operations)
-  steps.push({index:0,family:'core',operations:creationFirst,verifyOperations:coreFinalOperations(creationFirst,task.operations.slice(coreCount))})
+  const finalCore=coreFinalOperations(creationFirst,task.operations.slice(coreCount))
+  // Destructive later operations (currently range_move) change what an earlier
+  // core write means on retry. Dispatch the projected final-state core task as
+  // well as verifying against it; otherwise retry resurrects the consumed source
+  // and forces the move primitive to write again.
+  steps.push({index:0,family:'core',operations:finalCore,verifyOperations:finalCore})
  }
  for(const [index,op] of task.operations.entries()){
   if(index<coreCount)continue
