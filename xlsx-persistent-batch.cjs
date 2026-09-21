@@ -57,9 +57,28 @@ function coreFinalOperations(operations,tail){
    if(st.intent==='insert_rows'){
     const count=sr.end.row-sr.start.row+1
     if(sr.start.row<=wr.start.row){wr.start.row+=count;wr.end.row+=count;write.range=rangeToA1(wr)}
+    else if(sr.start.row<=wr.end.row){
+     // Insertion inside a write splits the original matrix around blank inserted
+     // rows. One rectangular write cannot express that final state, so replace
+     // it with the two surviving rectangular fragments for read-only verify/retry.
+     const cut=sr.start.row-wr.start.row,top=clone(write),bottom=clone(write)
+     top.range=rangeToA1({start:{...wr.start},end:{row:sr.start.row-1,column:wr.end.column}})
+     top.values=write.values.slice(0,cut);if(top.formulas)top.formulas=write.formulas.slice(0,cut)
+     bottom.range=rangeToA1({start:{row:sr.start.row+count,column:wr.start.column},end:{row:wr.end.row+count,column:wr.end.column}})
+     bottom.values=write.values.slice(cut);if(bottom.formulas)bottom.formulas=write.formulas.slice(cut)
+     write.__replace=[top,bottom]
+    }
    }else{
     const count=sr.end.column-sr.start.column+1
     if(sr.start.column<=wr.start.column){wr.start.column+=count;wr.end.column+=count;write.range=rangeToA1(wr)}
+    else if(sr.start.column<=wr.end.column){
+     const cut=sr.start.column-wr.start.column,left=clone(write),right=clone(write)
+     left.range=rangeToA1({start:{...wr.start},end:{row:wr.end.row,column:sr.start.column-1}})
+     left.values=write.values.map(r=>r.slice(0,cut));if(left.formulas)left.formulas=write.formulas.map(r=>r.slice(0,cut))
+     right.range=rangeToA1({start:{row:wr.start.row,column:sr.start.column+count},end:{row:wr.end.row,column:wr.end.column+count}})
+     right.values=write.values.map(r=>r.slice(cut));if(right.formulas)right.formulas=write.formulas.map(r=>r.slice(cut))
+     write.__replace=[left,right]
+    }
    }
   }
   // A later range move consumes the source cells. Project that destructive
@@ -85,7 +104,7 @@ function coreFinalOperations(operations,tail){
    rows.forEach((row,i)=>{write.values[start+i]=row.values;if(write.formulas)write.formulas[start+i]=row.formulas})
   }
  }
- return final
+ return final.flatMap(op=>op.__replace||[op]).map(op=>{if(op.__replace)delete op.__replace;return op})
 }
 const families=definitions.map(([file,intents,fn,method])=>({
  file,intents,method,agent:require('./xlsx-agent-'+file+'-task.cjs'),
