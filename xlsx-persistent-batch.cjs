@@ -36,6 +36,20 @@ function creationFirstCoreOperations(operations){
  return [...operations.filter(op=>op.intent==='create_sheet'),...operations.filter(op=>op.intent!=='create_sheet')]
 }
 function rangeToA1(r){const col=n=>{let s='';for(let x=n+1;x;x=Math.floor((x-1)/26))s=String.fromCharCode(65+(x-1)%26)+s;return s};return col(r.start.column)+(r.start.row+1)+':'+col(r.end.column)+(r.end.row+1)}
+function shiftFormulaForStructuralInsert(formula,st,sr){
+ if(typeof formula!=='string'||!formula.startsWith('='))return formula
+ if(st.intent==='insert_rows'){
+  const count=sr.end.row-sr.start.row+1,at=sr.start.row+1
+  return formula.replace(/(\$?[A-Z]{1,3})(\$?)(\d+)/g,(m,col,dollar,row)=>{const n=Number(row);return n>=at?col+dollar+(n+count):m})
+ }
+ if(st.intent==='insert_columns'){
+  const count=sr.end.column-sr.start.column+1,at=sr.start.column
+  const toNum=s=>{let n=0;for(const ch of s)n=n*26+ch.charCodeAt(0)-64;return n-1},toCol=n=>{let s='';for(let x=n+1;x;x=Math.floor((x-1)/26))s=String.fromCharCode(65+(x-1)%26)+s;return s}
+  return formula.replace(/(\$?)([A-Z]{1,3})(\$?\d+)/g,(m,dollar,col,row)=>{const n=toNum(col);return n>=at?dollar+toCol(n+count)+row:m})
+ }
+ return formula
+}
+function shiftFormulaMatrix(matrix,st,sr){return Array.isArray(matrix)?matrix.map(row=>Array.isArray(row)?row.map(v=>shiftFormulaForStructuralInsert(v,st,sr)):row):matrix}
 function projectCoreWritesForStructural(final,tail){
  let ops=final
  for(const st of tail.filter(op=>['insert_rows','insert_columns'].includes(op?.intent))){
@@ -47,12 +61,12 @@ function projectCoreWritesForStructural(final,tail){
    if(st.intent==='insert_rows'){
     const count=sr.end.row-sr.start.row+1
     if(sr.start.row<=wr.start.row){const x=clone(op);wr.start.row+=count;wr.end.row+=count;x.range=rangeToA1(wr);next.push(x)}
-    else if(sr.start.row<=wr.end.row){const cut=sr.start.row-wr.start.row,top=clone(op),bottom=clone(op);top.range=rangeToA1({start:{...wr.start},end:{row:sr.start.row-1,column:wr.end.column}});top.values=op.values.slice(0,cut);if(top.formulas)top.formulas=op.formulas.slice(0,cut);bottom.range=rangeToA1({start:{row:sr.start.row+count,column:wr.start.column},end:{row:wr.end.row+count,column:wr.end.column}});bottom.values=op.values.slice(cut);if(bottom.formulas)bottom.formulas=op.formulas.slice(cut);next.push(top,bottom)}
+    else if(sr.start.row<=wr.end.row){const cut=sr.start.row-wr.start.row,top=clone(op),bottom=clone(op);top.range=rangeToA1({start:{...wr.start},end:{row:sr.start.row-1,column:wr.end.column}});top.values=op.values.slice(0,cut);if(top.formulas)top.formulas=op.formulas.slice(0,cut);bottom.range=rangeToA1({start:{row:sr.start.row+count,column:wr.start.column},end:{row:wr.end.row+count,column:wr.end.column}});bottom.values=op.values.slice(cut);if(top.formulas)top.formulas=shiftFormulaMatrix(top.formulas,st,sr);if(bottom.formulas)bottom.formulas=shiftFormulaMatrix(op.formulas.slice(cut),st,sr);next.push(top,bottom)}
     else next.push(op)
    }else{
     const count=sr.end.column-sr.start.column+1
     if(sr.start.column<=wr.start.column){const x=clone(op);wr.start.column+=count;wr.end.column+=count;x.range=rangeToA1(wr);next.push(x)}
-    else if(sr.start.column<=wr.end.column){const cut=sr.start.column-wr.start.column,left=clone(op),right=clone(op);left.range=rangeToA1({start:{...wr.start},end:{row:wr.end.row,column:sr.start.column-1}});left.values=op.values.map(r=>r.slice(0,cut));if(left.formulas)left.formulas=op.formulas.map(r=>r.slice(0,cut));right.range=rangeToA1({start:{row:wr.start.row,column:sr.start.column+count},end:{row:wr.end.row,column:wr.end.column+count}});right.values=op.values.map(r=>r.slice(cut));if(right.formulas)right.formulas=op.formulas.map(r=>r.slice(cut));next.push(left,right)}
+    else if(sr.start.column<=wr.end.column){const cut=sr.start.column-wr.start.column,left=clone(op),right=clone(op);left.range=rangeToA1({start:{...wr.start},end:{row:wr.end.row,column:sr.start.column-1}});left.values=op.values.map(r=>r.slice(0,cut));if(left.formulas)left.formulas=op.formulas.map(r=>r.slice(0,cut));right.range=rangeToA1({start:{row:wr.start.row,column:sr.start.column+count},end:{row:wr.end.row,column:wr.end.column+count}});right.values=op.values.map(r=>r.slice(cut));if(left.formulas)left.formulas=shiftFormulaMatrix(left.formulas,st,sr);if(right.formulas)right.formulas=shiftFormulaMatrix(op.formulas.map(r=>r.slice(cut)),st,sr);next.push(left,right)}
     else next.push(op)
    }
   }
