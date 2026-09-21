@@ -175,7 +175,7 @@ function adapter(api,family,readOnly){
  if(family.file==='move-sheet')return {inspect:api.inspect,moveSheetVerified:readOnly?blocked:api.moveSheetVerified}
  if(family.file==='range-copy')return {inspect:api.inspect,readRange:api.readRange,copyRangeVerified:readOnly?blocked:api.copyRangeVerified}
  if(family.file==='range-move')return {inspect:api.inspect,readRange:api.readRange,moveRangeVerified:readOnly?blocked:api.moveRangeVerified}
- if(family.file==='structural')return {inspect:api.inspect,readRange:api.readRange,dispatchStructural:readOnly?blocked:api.dispatchStructural}
+ if(family.file==='structural')return {inspect:api.inspect,readRange:api.readRange,session:readOnly?undefined:api.session}
  const run=async(...args)=>{
   const spec=args[0],apply=family.file==='format'?!!spec.apply:!!args[1]
   if(family.file==='conditional-format'){
@@ -207,7 +207,9 @@ async function executeBatchTask({task,api}){
   // Range-move retry idempotence is handled by the move family itself. The
   // batch must not synthesize a retry token from only the current post-state;
   // that cannot reconstruct the operation-bound before/after proof.
-  const result=await f.agent[f.execute]({task:{operations},api:step.family==='core'?coreAdapter(api,false):adapter(api,f,false)})
+  const result=step.family==='structural'
+   ?await f.persistent[f.execute](api.session,api,{operations})
+   :await f.agent[f.execute]({task:{operations},api:step.family==='core'?coreAdapter(api,false):adapter(api,f,false)})
   steps.push({index:step.index,intent:step.family==='core'?'core_task':step.operation.intent,result})
   if(!result.ok||result.authority!=='LIVE_VERIFY')return {ok:false,outcome:'xlsx-batch-step-failed',authority:'LIVE_READ',writeAllowed:false,steps}
  }
@@ -216,7 +218,9 @@ async function executeBatchTask({task,api}){
   const operations=step.verifyOperations||step.operations||[step.operation]
   let verifyOperations=operations
   if(step.family==='range-move'){const applied=steps.find(s=>s.index===step.index&&s.intent==='move_range')?.result;if(applied?.retryToken)verifyOperations=[{...operations[0],retryToken:applied.retryToken}]}
-  const result=await f.agent[f.execute]({task:{operations:verifyOperations},api:step.family==='core'?coreAdapter(api,true):adapter(api,f,true)})
+  const result=step.family==='structural'
+   ?await f.persistent[f.execute](api.session,api,{operations:verifyOperations})
+   :await f.agent[f.execute]({task:{operations:verifyOperations},api:step.family==='core'?coreAdapter(api,true):adapter(api,f,true)})
   const ok=result.ok&&result.authority==='LIVE_VERIFY'&&result.noOp===true
   for(const op of operations)checks.push({index:op.index,intent:op.intent,ok})
   if(!ok)return {ok:false,outcome:'xlsx-batch-whole-verify-failed',authority:'PRIMITIVE_LIVE_VERIFY_ONLY',writeAllowed:false,steps,checks,failed:result}
