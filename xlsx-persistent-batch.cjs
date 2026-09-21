@@ -18,7 +18,8 @@ const definitions=[
  ['print-titles',['set_print_titles'],'PrintTitles','printTitlesObserved'],
  ['print-area',['set_print_area'],'PrintArea','printAreaObserved'],
  ['header-footer',['set_header_footer'],'HeaderFooter','headerFooterObserved'],
- ['page-break',['set_page_break'],'PageBreak','pageBreakObserved']
+ ['page-break',['set_page_break'],'PageBreak','pageBreakObserved'],
+ ['first-page-number',['set_first_page_number'],'FirstPageNumber','firstPageNumberObserved']
 ]
 const core={
  file:'core',
@@ -99,6 +100,7 @@ function goalTarget(family,operation){
  if(family.file==='print-area')return family.file+':'+sheet
  if(family.file==='header-footer')return family.file+':'+sheet+':'+String(operation.slot||'')
  if(family.file==='page-break')return family.file+':'+sheet+':'+String(operation.mode||'')+':'+String(operation.axis||'')+':'+String(operation.at||'')
+ if(family.file==='first-page-number')return family.file+':'+sheet
  return family.file+':'+String(operation.sheet||operation.name).toLowerCase()
 }
 families.push(
