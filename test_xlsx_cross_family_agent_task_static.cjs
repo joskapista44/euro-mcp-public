@@ -6,9 +6,13 @@ const {buildCrossFamilyTask,withRetryReceipts}=require('./xlsx-cross-family-agen
 
 const task=buildCrossFamilyTask('ABC1234'),plan=batch.planTask(task)
 assert.equal(plan.ok,true)
-assert.equal(task.operations.length,18)
-assert.equal(plan.steps.length,12)
+assert.equal(task.operations.length,19)
+assert.equal(plan.steps.length,13)
 assert.equal(plan.readbacks.length,4)
+const widthStep=plan.steps.find(step=>step.operation?.type==='column.width')
+const autoFitStep=plan.steps.find(step=>step.operation?.type==='columns.autofit')
+assert.equal(widthStep.transientSetup,true)
+assert.equal(widthStep.supersededByIndex,autoFitStep.index)
 const dateWrite=task.operations.find(op=>op.intent==='write_range'&&op.sheet===task.names.plan)
 assert.deepEqual(dateWrite.values.slice(1).map(row=>row[2]),[null,null,null])
 assert.deepEqual(dateWrite.formulas.slice(1).map(row=>row[2]),['=DATE(2026,10,5)','=DATE(2026,10,8)','=DATE(2026,10,12)'])
@@ -17,10 +21,11 @@ for(const family of ['core','structural','sort','filter','range-copy','range-mov
 const publicOperations=task.operations.map(op=>op.intent==='set_print_area'?{...op,printAreaMode:op.mode,mode:undefined}:op).map(op=>Object.fromEntries(Object.entries(op).filter(([,value])=>value!==undefined)))
 assert.equal(mcp.schema.safeParse({file_id:'123',operations:publicOperations,readbacks:task.readbacks}).success,true)
 assert.equal(batch.planTask({operations:mcp.normalizeOperations(publicOperations),readbacks:task.readbacks}).ok,true)
-const receipt={steps:[{intent:'insert_rows',result:{retryToken:'structural-token'}},{intent:'move_range',result:{retryToken:'move-token'}},{intent:'layout_range',result:{retryToken:'autofit-token'}}]}
+const receipt={steps:[{index:7,intent:'insert_rows',result:{retryToken:'structural-token'}},{index:11,intent:'move_range',result:{retryToken:'move-token'}},{index:14,intent:'layout_range',result:{retryToken:'autofit-token'}}]}
 const retry=withRetryReceipts(task,receipt)
 assert.equal(retry.operations.find(op=>op.intent==='insert_rows').retryToken,'structural-token')
 assert.equal(retry.operations.find(op=>op.intent==='move_range').retryToken,'move-token')
 assert.equal(retry.operations.find(op=>op.type==='columns.autofit').retryToken,'autofit-token')
+assert.equal(retry.operations.find(op=>op.type==='column.width').retryToken,undefined)
 assert.equal(task.operations.find(op=>op.intent==='insert_rows').retryToken,undefined)
 console.log('XLSX CROSS-FAMILY AGENT TASK STATIC: PASS')

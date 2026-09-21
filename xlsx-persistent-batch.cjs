@@ -35,21 +35,25 @@ function creationFirstCoreOperations(operations){
  // retain request indices for receipts and final verification.
  return [...operations.filter(op=>op.intent==='create_sheet'),...operations.filter(op=>op.intent!=='create_sheet')]
 }
-function rangeToA1(r){const col=n=>{let s='';for(let x=n+1;x;x=Math.floor((x-1)/26))s=String.fromCharCode(65+(x-1)%26)+s;return s};return col(r.start.column)+(r.start.row+1)+':'+col(r.end.column)+(r.end.row+1)}
+function rangeToA1(r){const col=n=>{let s='';for(let x=n;x;x=Math.floor((x-1)/26))s=String.fromCharCode(65+(x-1)%26)+s;return s};return col(r.start.column)+r.start.row+':'+col(r.end.column)+r.end.row}
 function shiftFormulaForStructuralInsert(formula,st,sr){
  if(typeof formula!=='string'||!formula.startsWith('='))return formula
  if(st.intent==='insert_rows'){
-  const count=sr.end.row-sr.start.row+1,at=sr.start.row+1
+  const count=sr.end.row-sr.start.row+1,at=sr.start.row
   return formula.replace(/(\$?[A-Z]{1,3})(\$?)(\d+)/g,(m,col,dollar,row)=>{const n=Number(row);return n>=at?col+dollar+(n+count):m})
  }
  if(st.intent==='insert_columns'){
   const count=sr.end.column-sr.start.column+1,at=sr.start.column
-  const toNum=s=>{let n=0;for(const ch of s)n=n*26+ch.charCodeAt(0)-64;return n-1},toCol=n=>{let s='';for(let x=n+1;x;x=Math.floor((x-1)/26))s=String.fromCharCode(65+(x-1)%26)+s;return s}
+  const toNum=s=>{let n=0;for(const ch of s)n=n*26+ch.charCodeAt(0)-64;return n},toCol=n=>{let s='';for(let x=n;x;x=Math.floor((x-1)/26))s=String.fromCharCode(65+(x-1)%26)+s;return s}
   return formula.replace(/(\$?)([A-Z]{1,3})(\$?\d+)/g,(m,dollar,col,row)=>{const n=toNum(col);return n>=at?dollar+toCol(n+count)+row:m})
  }
  return formula
 }
 function shiftFormulaMatrix(matrix,st,sr){return Array.isArray(matrix)?matrix.map(row=>Array.isArray(row)?row.map(v=>shiftFormulaForStructuralInsert(v,st,sr)):row):matrix}
+function shiftFormulaRows(formula,delta){
+ if(typeof formula!=='string'||!formula.startsWith('=')||!delta)return formula
+ return formula.replace(/(\$?[A-Z]{1,3})(\$?)(\d+)/g,(m,col,absolute,row)=>absolute?m:col+(Number(row)+delta))
+}
 function projectCoreWritesForStructural(final,tail){
  let ops=final
  for(const st of tail.filter(op=>['insert_rows','insert_columns'].includes(op?.intent))){
@@ -103,10 +107,10 @@ function coreFinalOperations(operations,tail){
    const sr=parseA1Range(sort.range),kr=parseA1Range(sort.keyRange);if(!sr||!kr||sr.start.row<wr.start.row||sr.end.row>wr.end.row||sr.start.column<wr.start.column||sr.end.column>wr.end.column)continue
    const from=sr.start.row-wr.start.row,to=sr.end.row-wr.start.row,key=kr.start.column-wr.start.column,header=sort.hasHeaders!==false?1:0
    const start=from+header,rows=[]
-   for(let r=start;r<=to;r++)rows.push({values:write.values[r],formulas:write.formulas?write.formulas[r]:null})
+   for(let r=start;r<=to;r++)rows.push({sourceRow:wr.start.row+r,values:write.values[r],formulas:write.formulas?write.formulas[r]:null})
    const cell=x=>{const f=x.formulas?.[key];return f!=null?f:x.values?.[key]}
    rows.sort((a,b)=>{const av=cell(a),bv=cell(b);if(av==null&&bv==null)return 0;if(av==null)return 1;if(bv==null)return -1;const an=Number(av),bn=Number(bv),cmp=Number.isFinite(an)&&Number.isFinite(bn)?an-bn:String(av).localeCompare(String(bv));return sort.order==='desc'?-cmp:cmp})
-   rows.forEach((row,i)=>{write.values[start+i]=row.values;if(write.formulas)write.formulas[start+i]=row.formulas})
+   rows.forEach((row,i)=>{const destinationRow=wr.start.row+start+i,delta=destinationRow-row.sourceRow;write.values[start+i]=row.values;if(write.formulas)write.formulas[start+i]=row.formulas?.map(formula=>shiftFormulaRows(formula,delta))})
   }
  }
  return projectCoreWritesForStructural(final,tail)
@@ -170,11 +174,11 @@ function planTask(task){
   if(!planned.ok)return planned
   const creationFirst=creationFirstCoreOperations(planned.operations)
   const finalCore=coreFinalOperations(creationFirst,task.operations.slice(coreCount))
-  // Destructive later operations (currently range_move) change what an earlier
-  // core write means on retry. Dispatch the projected final-state core task as
-  // well as verifying against it; otherwise retry resurrects the consumed source
-  // and forces the move primitive to write again.
-  steps.push({index:0,family:'core',operations:finalCore,verifyOperations:finalCore})
+  // Receipt-bound structural and move operations must see the actual state made
+  // by core on their first execution. Once a receipt is supplied, dispatch the
+  // projected final state so a retry cannot resurrect shifted or consumed cells.
+  const receiptBoundReplay=task.operations.slice(coreCount).some(op=>['insert_rows','insert_columns','move_range'].includes(op?.intent))
+  steps.push({index:0,family:'core',operations:creationFirst,verifyOperations:finalCore,receiptBoundReplay})
  }
  for(const [index,op] of task.operations.entries()){
   if(index<coreCount)continue
@@ -186,7 +190,10 @@ function planTask(task){
   // and independently named objects to share a worksheet.
   const target=goalTarget(family,plan.operation)
   if(targets.has(target))return {ok:false,outcome:'xlsx-batch-conflicting-goals',authority:'PLAN_ONLY',index}
-  targets.add(target);steps.push({index,family:family.file,operation:{...plan.operation,index}})
+  targets.add(target)
+  const autoFitType=plan.operation.type==='column.width'?'columns.autofit':plan.operation.type==='row.height'?'rows.autofit':null
+  const supersededByIndex=autoFitType==null?-1:task.operations.findIndex((later,laterIndex)=>laterIndex>index&&later?.intent==='layout_range'&&later.type===autoFitType&&String(later.sheet).toLowerCase()===String(plan.operation.sheet).toLowerCase()&&String(later.range).toUpperCase()===String(plan.operation.range).toUpperCase())
+  steps.push({index,family:family.file,operation:{...plan.operation,index},transientSetup:supersededByIndex>=0,supersededByIndex})
  }
  // Freeze panes are worksheet-view state in the deployed runtime. Pivot/chart
  // object work can switch the editor's sheet context after an otherwise
@@ -237,10 +244,17 @@ async function executeBatchTask({task,api}){
  const steps=[],checks=[]
  for(const step of plan.steps){
   const f=step.family==='core'?core:families.find(f=>f.file===step.family)
-  // Core writes are projected to the requested final state. A later clear of
-  // the same cells makes the intermediate values dead writes on both apply
-  // and retry, so they must never be dispatched.
-  let operations=step.verifyOperations||step.operations||[step.operation]
+  // A receipt marks a replay after an operation-bound transformation. Initial
+  // execution must expose the original core state to those dependent steps;
+  // replay dispatches the projected state to preserve zero-write idempotence.
+  const hasRetryReceipt=task.operations.some(op=>typeof op?.retryToken==='string'&&op.retryToken.length>0)
+  let operations=step.family==='core'&&step.receiptBoundReplay&&!hasRetryReceipt
+   ?step.operations
+   :step.verifyOperations||step.operations||[step.operation]
+  if(step.transientSetup&&task.operations[step.supersededByIndex]?.retryToken){
+   steps.push({index:step.index,intent:step.operation.intent,result:{ok:true,outcome:'xlsx-layout-transient-setup-consumed',authority:'LIVE_VERIFY',noOp:true}})
+   continue
+  }
   // Structural standalone tasks intentionally accept a missing precondition and
   // derive the before/post proof from the owning LIVE session. Batch operations
   // are normalized by planTask, where absent optional fingerprints are null;
@@ -260,9 +274,11 @@ async function executeBatchTask({task,api}){
   steps.push({index:step.index,intent:step.family==='core'?'core_task':step.operation.intent,result})
   if(!result.ok||result.authority!=='LIVE_VERIFY')return {ok:false,outcome:'xlsx-batch-step-failed',authority:'LIVE_READ',writeAllowed:false,steps}
  }
+ const checkedIndices=new Set()
  for(const step of plan.steps){
   const f=step.family==='core'?core:families.find(f=>f.file===step.family)
   const operations=step.verifyOperations||step.operations||[step.operation]
+  if(step.transientSetup){if(!checkedIndices.has(step.index)){checks.push({index:step.index,intent:step.operation.intent,ok:true,superseded:true});checkedIndices.add(step.index)};continue}
   let verifyOperations=operations
   if(step.family==='range-move'){const applied=steps.find(s=>s.index===step.index&&s.intent==='move_range')?.result;if(applied?.retryToken)verifyOperations=[{...operations[0],retryToken:applied.retryToken}]}
   if(step.family==='structural'){const applied=steps.find(s=>s.index===step.index&&s.intent===step.operation.intent)?.result;if(applied?.retryToken)verifyOperations=[{...operations[0],retryToken:applied.retryToken}];verifyOperations=verifyOperations.map(op=>{const x={...op};if(x.preconditionFingerprint==null)delete x.preconditionFingerprint;if(x.expectedPostFingerprint==null)delete x.expectedPostFingerprint;if(x.retryToken==null)delete x.retryToken;return x})} 
@@ -271,7 +287,7 @@ async function executeBatchTask({task,api}){
    ?await f.persistent[f.execute](api.session,api,{operations:verifyOperations})
    :await f.agent[f.execute]({task:{operations:verifyOperations},api:step.family==='core'?coreAdapter(api,true):adapter(api,f,true)})
   const ok=result.ok&&result.authority==='LIVE_VERIFY'&&result.noOp===true
-  for(const op of operations)checks.push({index:op.index,intent:op.intent,ok})
+  for(const op of operations)if(!checkedIndices.has(op.index)){checks.push({index:op.index,intent:op.intent,ok});checkedIndices.add(op.index)}
   if(!ok)return {ok:false,outcome:'xlsx-batch-whole-verify-failed',authority:'PRIMITIVE_LIVE_VERIFY_ONLY',writeAllowed:false,steps,checks,failed:result}
  }
  const readbacks=[]

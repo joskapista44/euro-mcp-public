@@ -30,6 +30,7 @@ function buildCrossFamilyTask(runId){
   {intent:'copy_range',sheet:input,range:'A1:F5',targetSheet:report,targetRange:'A1:F5'},
   {intent:'move_range',sheet:staging,range:'A1:B3',targetSheet:report,targetRange:'G2:H4'},
   {intent:'format_range',sheet:report,range:'A1:H1',format:{bold:true,fontName:'Arial',fontColor:[255,255,255],fillColor:[31,56,100],alignHorizontal:'center'}},
+  {intent:'layout_range',sheet:report,range:'A1:H5',type:'column.width',width:5},
   {intent:'layout_range',sheet:report,range:'A1:H5',type:'columns.autofit'},
   {intent:'set_page_layout',sheet:report,orientation:'xlLandscape',topMargin:10,bottomMargin:10,leftMargin:8,rightMargin:8,printGridlines:false,printHeadings:false},
   {intent:'set_print_setup',sheet:report,mode:'fit_to_pages',fitToWidth:1,fitToHeight:1},
@@ -40,9 +41,9 @@ function buildCrossFamilyTask(runId){
 }
 
 function withRetryReceipts(task,result){
- const tokenByIntent=new Map()
- for(const step of result?.steps||[])if(step?.result?.retryToken)tokenByIntent.set(step.intent,step.result.retryToken)
- return {...task,operations:task.operations.map(op=>tokenByIntent.has(op.intent)?{...op,retryToken:tokenByIntent.get(op.intent)}:op)}
+ const tokenByIndex=new Map()
+ for(const step of result?.steps||[])if(step?.result?.retryToken)tokenByIndex.set(step.index,step.result.retryToken)
+ return {...task,operations:task.operations.map((op,index)=>tokenByIndex.has(index)?{...op,retryToken:tokenByIndex.get(index)}:op)}
 }
 
 module.exports={buildCrossFamilyTask,withRetryReceipts}

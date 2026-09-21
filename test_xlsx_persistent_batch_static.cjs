@@ -66,6 +66,24 @@ const cf=require('./xlsx-persistent-conditional-format.cjs')
  let clearCalls=0;clearAgent.executeClearTask=async()=>({ok:true,authority:'LIVE_VERIFY',noOp:++clearCalls>1})
  try{const overlayResult=await batch.executeBatchTask({task:{operations:[{intent:'create_sheet',name:'X'},{intent:'write_range',sheet:'X',range:'A1:B2',values:[[1,2],[3,4]]},{intent:'rename_sheet',sheet:'X',name:'Y'},{intent:'clear_range',sheet:'Y',range:'B2'}]},api:{}});assert.equal(overlayResult.ok,true);assert.deepEqual(seen,[null,null])}
  finally{coreAgent.executeTask=originalCoreExecute;clearAgent.executeClearTask=originalClearExecute}
+ const moveAgent=require('./xlsx-agent-range-move-task.cjs'),moveRetry=require('./xlsx-range-move-retry-token.cjs'),originalMoveExecute=moveAgent.executeRangeMoveTask,dependentSeen=[]
+ const moveOp={intent:'move_range',sheet:'D',range:'A1:B1',targetSheet:'D',targetRange:'C1:D1'},fingerprint='0'.repeat(64)
+ const moveToken={version:2,operationFingerprint:moveRetry.operationFingerprint(moveOp),sourceBeforeFingerprint:fingerprint,targetBeforeFingerprint:fingerprint,sourceAfterFingerprint:fingerprint,targetAfterFingerprint:fingerprint}
+ coreAgent.executeTask=async({task})=>{dependentSeen.push(task.operations.find(x=>x.intent==='write_range').values[0][0]);return {ok:true,authority:'LIVE_VERIFY',noOp:dependentSeen.length>1}}
+ moveAgent.executeRangeMoveTask=async({task})=>({ok:true,authority:'LIVE_VERIFY',noOp:!!task.operations[0].retryToken,retryToken:moveToken})
+ try{
+  const dependentTask={operations:[{intent:'create_sheet',name:'D'},{intent:'write_range',sheet:'D',range:'A1:B1',values:[['source',1]]},moveOp]}
+  const first=await batch.executeBatchTask({task:dependentTask,api:{}});assert.equal(first.ok,true);assert.deepEqual(dependentSeen,['source',null])
+  const retryTask={operations:dependentTask.operations.map((op,index)=>index===2?{...op,retryToken:moveToken}:op)}
+  const retry=await batch.executeBatchTask({task:retryTask,api:{}});assert.equal(retry.ok,true);assert.equal(retry.noOp,true);assert.deepEqual(dependentSeen,['source',null,null,null])
+ }finally{coreAgent.executeTask=originalCoreExecute;moveAgent.executeRangeMoveTask=originalMoveExecute}
+ const layoutAgent=require('./xlsx-agent-layout-task.cjs'),autoFitRetry=require('./xlsx-layout-autofit-retry-token.cjs'),originalLayoutExecute=layoutAgent.executeLayoutTask
+ const autoFitOp={intent:'layout_range',sheet:'L',range:'A1:C3',type:'columns.autofit'},autoFitToken=autoFitRetry.make(autoFitOp,5,20);let layoutCalls=0
+ layoutAgent.executeLayoutTask=async({task})=>{layoutCalls++;assert.equal(task.operations[0].type,'columns.autofit');return {ok:true,authority:'LIVE_VERIFY',noOp:true,retryToken:autoFitToken}}
+ try{
+  const consumed=await batch.executeBatchTask({task:{operations:[{intent:'layout_range',sheet:'L',range:'A1:C3',type:'column.width',width:5},{...autoFitOp,retryToken:autoFitToken}]},api:{}})
+  assert.equal(consumed.ok,true);assert.equal(consumed.noOp,true);assert.equal(layoutCalls,2);assert.equal(consumed.steps[0].result.outcome,'xlsx-layout-transient-setup-consumed');assert.equal(consumed.wholeTaskVerification.checks[0].superseded,true)
+ }finally{layoutAgent.executeLayoutTask=originalLayoutExecute}
  const originalCf=cf.runCommand;let cfPresent=false,cfWrites=0
  const cfRule={type:'xlCellValue',operator:'xlGreater',formula1:'5',fillColor:[1,2,3]}
  cf.runCommand=async(_session,spec)=>{
