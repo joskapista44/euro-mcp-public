@@ -35,6 +35,7 @@ function creationFirstCoreOperations(operations){
  // retain request indices for receipts and final verification.
  return [...operations.filter(op=>op.intent==='create_sheet'),...operations.filter(op=>op.intent!=='create_sheet')]
 }
+function rangeToA1(r){const col=n=>{let s='';for(let x=n+1;x;x=Math.floor((x-1)/26))s=String.fromCharCode(65+(x-1)%26)+s;return s};return col(r.start.column)+(r.start.row+1)+':'+col(r.end.column)+(r.end.row+1)}
 function coreFinalOperations(operations,tail){
  const final=clone(operations)
  for(const write of final.filter(op=>op.intent==='write_range')){
@@ -45,6 +46,20 @@ function coreFinalOperations(operations,tail){
    for(let r=r0;r<=r1;r++)for(let c=c0;c<=c1;c++){
     write.values[r-wr.start.row][c-wr.start.column]=null
     if(write.formulas)write.formulas[r-wr.start.row][c-wr.start.column]=null
+   }
+  }
+  // Structural row/column insertion shifts an earlier write. Project the
+  // write target itself to the final coordinates; otherwise the read-only core
+  // verifier sees the pre-insert range as unsatisfied and correctly refuses the
+  // write that verification mode blocks.
+  for(const st of tail.filter(op=>['insert_rows','insert_columns'].includes(op?.intent)&&op.sheet===sheet)){
+   const sr=parseA1Range(st.range);if(!sr)continue
+   if(st.intent==='insert_rows'){
+    const count=sr.end.row-sr.start.row+1
+    if(sr.start.row<=wr.start.row){wr.start.row+=count;wr.end.row+=count;write.range=rangeToA1(wr)}
+   }else{
+    const count=sr.end.column-sr.start.column+1
+    if(sr.start.column<=wr.start.column){wr.start.column+=count;wr.end.column+=count;write.range=rangeToA1(wr)}
    }
   }
   // A later range move consumes the source cells. Project that destructive
