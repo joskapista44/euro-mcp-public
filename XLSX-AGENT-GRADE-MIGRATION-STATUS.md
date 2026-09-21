@@ -303,3 +303,42 @@ The final strict persisted retry passed on the deployed live runtime for `mcp_te
 The final blocker was a measured save/reopen representation boundary in chart geometry. The requested region-chart size 3800000 x 2300000 reopened through public getters as 3799999.8 x 2299999.68, causing an unnecessary corrective `chart.modify` on every invocation despite all other chart semantics and the exact durable geometry identity matching. Chart verification now treats only a finite sub-1-EMU difference as the persisted representation of the requested geometry, and only when that chart's exact size-bearing durable geometry identity is present and verified. Exact equality remains preferred; differences of 1 EMU or more, missing/mismatching identity, or any other semantic mismatch remain fail-closed.
 
 This closes the visual-showcase W0.12 persisted-idempotence gate. The showcased construction/readback contract is TRUE LIVE accepted for its documented semantic surface: one task = one persistent editor session, complete preplanned batch, semantic same-session verification, wrapper-owned persistence only after verified writes, wrapper-owned close, and a subsequent identical invocation proving the persisted final state with zero writes and no save barrier. Existing explicit limitations remain unchanged, including print/page layout, genuine Table/ListObject identity, chart copy, whole-sheet password protection, protected-range identity/delete, broad pivot equivalence, and retry-token-bound relative/destructive operations.
+
+## 2026-09-21 — M9 cross-family complex task — TRUE LIVE PASS
+
+User-supplied runtime output for the requested candidate `4f6988ecd03781a907263f6bc22712a630304a38` reports:
+
+```text
+XLSX BATCH OBJECT RECEIPT STATIC: PASS
+XLSX CROSS-FAMILY AGENT TASK STATIC: PASS
+XLSX CROSS-FAMILY COMPLEX AGENT-TASK LIVE ACCEPTANCE: PASS
+```
+
+Runner: `test_xlsx_cross_family_agent_task_live_acceptance.cjs`.
+Contract: `xlsx-cross-family-agent-task.cjs`.
+Development authority: `joskapista44/euro-mcp-public`, branch `feature/xlsx-visual-demo`.
+Operator worktree: `/home/user/xlsx-persistent-live-session-wt`; caller `elliot`.
+The supplied console excerpt does not separately print HEAD or file ID; the runner defaults to file ID 1231187 unless overridden.
+
+| Measurement | Initial apply | Persisted reopen retry |
+| --- | ---: | ---: |
+| Result | LIVE_VERIFY | LIVE_VERIFY |
+| noOp | false | true |
+| Editor sessions per invocation | 1 | 1 |
+| Verified writes | 19 | 0 |
+| Final operation checks | 19 | 19 |
+| Final range readbacks | 4 | 4 |
+| Editor open time (ms) | 3242 | 3023 |
+| Task time (ms) | 3647 | 1888 |
+| Wrapper-owned close | true | true |
+| Persistence barrier | successful | null |
+
+Apply barrier: `forceSave-can-save-false`, canSave true -> false, 3 reads, 276 ms postcondition wait. The retry is a separate invocation with one newly opened editor session.
+
+The fixture creates four uniquely named sheets, writes numeric and formula data including explicit DATE expressions, inserts a plan row, sorts input data, applies an exact filter, copies the sorted range to a report, moves notes to that report, formats its header, seeds narrow column widths then AutoFits, and applies page layout, fit-to-pages, print area and header text. Initial sort is a real mutation. Each requested final state passes whole-task verification. Final readbacks additionally assert the Cobalt/97000 leading record in input and report, moved Control text, a blank move source, and the inserted blank plan row with North follow-up below it.
+
+Reopen round-trips operation-bound receipts by original task index. Structural insert, move and AutoFit prove their accepted post-state; AutoFit's superseded width setup is consumed without another width mutation. Every retry step is no-op, with zero writes and no persistence barrier.
+
+Fixes exercised by this acceptance include 1-based A1 structural projection, relative formula projection after sorting, preserving initial dependent core data, final-state replay with validated object receipts, original-index receipt lookup, and LIVE blank-cell assertions.
+
+Scope: this closes M9 for this exact composed fixture through the persistent batch executor. It does not establish unrestricted operation ordering, full worksheet equivalence, every formatting/printing variant, rendered PDF pagination, or an autonomous natural-language agent run through MCP stdio. Existing family limitations remain. Earlier sections above describe historical states; this entry supersedes their standalone-only and print-layout-open statements only for the operation-bound batch and page/print surfaces explicitly exercised here.
