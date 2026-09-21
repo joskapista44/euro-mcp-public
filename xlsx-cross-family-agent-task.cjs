@@ -14,12 +14,15 @@ function buildCrossFamilyTask(runId){
   ['Delta','West',74000,70000,null,'Review']
  ],inputFormulas=blanks(5,6)
  for(let row=2;row<=5;row++)inputFormulas[row-1][4]=`=C${row}-D${row}`
- const planValues=[['Quarter plan','Owner','Due'],['North follow-up','Anna','2026-10-05'],['South recovery','Bela','2026-10-08'],['West renewal','Csilla','2026-10-12']]
+ // Dates are spreadsheet expressions, not strings for SetValue to auto-coerce.
+ const planValues=[['Quarter plan','Owner','Due'],['North follow-up','Anna',null],['South recovery','Bela',null],['West renewal','Csilla',null]]
+ const planFormulas=blanks(4,3)
+ ;[5,8,12].forEach((day,index)=>{planFormulas[index+1][2]=`=DATE(2026,10,${day})`})
  const notes=[['Control','Result'],['Source','LIVE input'],['Method','Persistent batch']]
  const operations=[
   {intent:'create_sheet',name:input},{intent:'create_sheet',name:plan},{intent:'create_sheet',name:staging},{intent:'create_sheet',name:report},
   {intent:'write_range',sheet:input,range:'A1:F5',values:inputValues,formulas:inputFormulas},
-  {intent:'write_range',sheet:plan,range:'A1:C4',values:planValues},
+  {intent:'write_range',sheet:plan,range:'A1:C4',values:planValues,formulas:planFormulas},
   {intent:'write_range',sheet:staging,range:'A1:B3',values:notes},
   {intent:'insert_rows',sheet:plan,range:'A2:C2'},
   {intent:'sort_range',sheet:input,range:'A1:F5',keyRange:'C1:C5',order:'desc',hasHeaders:true},
