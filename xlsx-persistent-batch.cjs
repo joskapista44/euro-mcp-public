@@ -65,7 +65,7 @@ function coreFinalOperations(operations,tail){
 }
 const families=definitions.map(([file,intents,fn,method])=>({
  file,intents,method,agent:require('./xlsx-agent-'+file+'-task.cjs'),
- transport:require('./xlsx-persistent-'+file+'.cjs'),execute:'execute'+fn+'Task'
+ transport:require(file==='first-page-number'?'./xlsx-persistent-page-number-order.cjs':'./xlsx-persistent-'+file+'.cjs'),execute:'execute'+fn+'Task'
 }))
 const {parseA1Range}=require('./range-reader.cjs')
 function readbackPlan(task){
