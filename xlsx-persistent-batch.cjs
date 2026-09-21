@@ -105,6 +105,7 @@ function goalTarget(family,operation){
 }
 families.push(
  {file:'clear',intents:['clear_range'],agent:require('./xlsx-agent-clear-task.cjs'),execute:'executeClearTask',planTask:task=>{const op=task?.operations?.[0],p=op?parseA1Range(op.range):null;return task?.operations?.length===1&&op?.intent==='clear_range'&&typeof op.sheet==='string'&&op.sheet.trim()&&p?{ok:true,operation:{index:0,intent:'clear_range',sheet:op.sheet,range:p.address}}:{ok:false,outcome:'xlsx-clear-task-invalid',authority:'PLAN_ONLY'}}},
+ {file:'range-copy',intents:['copy_range'],agent:require('./xlsx-agent-range-copy-task.cjs'),execute:'executeRangeCopyTask'},
  {file:'move-sheet',intents:['move_sheet'],agent:require('./xlsx-agent-move-task.cjs'),execute:'executeMoveTask',planTask:task=>{const op=task?.operations?.[0],ok=task?.operations?.length===1&&op?.intent==='move_sheet'&&typeof op.sheet==='string'&&op.sheet.trim()&&typeof op.referenceSheet==='string'&&op.referenceSheet.trim()&&op.sheet!==op.referenceSheet&&['before','after'].includes(op.position);return ok?{ok:true,operation:{index:0,intent:'move_sheet',sheet:op.sheet,referenceSheet:op.referenceSheet,position:op.position}}:{ok:false,outcome:'xlsx-move-task-invalid',authority:'PLAN_ONLY'}}}
 )
 function planTask(task){
@@ -156,6 +157,7 @@ function adapter(api,family,readOnly){
  const blocked=async()=>({ok:false,outcome:'xlsx-batch-verification-write-blocked',authority:'PLAN_ONLY'})
  if(family.file==='clear')return {inspect:api.inspect,readRange:api.readRange,session:readOnly?undefined:api.session}
  if(family.file==='move-sheet')return {inspect:api.inspect,moveSheetVerified:readOnly?blocked:api.moveSheetVerified}
+ if(family.file==='range-copy')return {inspect:api.inspect,readRange:api.readRange,copyRangeVerified:readOnly?blocked:api.copyRangeVerified}
  const run=async(...args)=>{
   const spec=args[0],apply=family.file==='format'?!!spec.apply:!!args[1]
   if(family.file==='conditional-format'){
