@@ -1,0 +1,23 @@
+'use strict'
+const assert=require('assert/strict')
+const batch=require('./xlsx-persistent-batch.cjs')
+const mcp=require('./xlsx-batch-mcp.cjs')
+const {buildCrossFamilyTask,withRetryReceipts}=require('./xlsx-cross-family-agent-task.cjs')
+
+const task=buildCrossFamilyTask('ABC1234'),plan=batch.planTask(task)
+assert.equal(plan.ok,true)
+assert.equal(task.operations.length,18)
+assert.equal(plan.steps.length,12)
+assert.equal(plan.readbacks.length,4)
+assert.deepEqual([...new Set(plan.steps.map(step=>step.family))],['core','structural','sort','filter','range-copy','range-move','format','layout','page-layout','print-setup','print-area','header-footer'])
+for(const family of ['core','structural','sort','filter','range-copy','range-move','format','layout','page-layout','print-setup','print-area','header-footer'])assert(plan.steps.some(step=>step.family===family),`missing family: ${family}`)
+const publicOperations=task.operations.map(op=>op.intent==='set_print_area'?{...op,printAreaMode:op.mode,mode:undefined}:op).map(op=>Object.fromEntries(Object.entries(op).filter(([,value])=>value!==undefined)))
+assert.equal(mcp.schema.safeParse({file_id:'123',operations:publicOperations,readbacks:task.readbacks}).success,true)
+assert.equal(batch.planTask({operations:mcp.normalizeOperations(publicOperations),readbacks:task.readbacks}).ok,true)
+const receipt={steps:[{intent:'insert_rows',result:{retryToken:'structural-token'}},{intent:'move_range',result:{retryToken:'move-token'}},{intent:'layout_range',result:{retryToken:'autofit-token'}}]}
+const retry=withRetryReceipts(task,receipt)
+assert.equal(retry.operations.find(op=>op.intent==='insert_rows').retryToken,'structural-token')
+assert.equal(retry.operations.find(op=>op.intent==='move_range').retryToken,'move-token')
+assert.equal(retry.operations.find(op=>op.type==='columns.autofit').retryToken,'autofit-token')
+assert.equal(task.operations.find(op=>op.intent==='insert_rows').retryToken,undefined)
+console.log('XLSX CROSS-FAMILY AGENT TASK STATIC: PASS')

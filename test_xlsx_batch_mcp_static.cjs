@@ -8,7 +8,7 @@ const {register,schema}=require('./xlsx-batch-mcp.cjs')
  let credentials=0,calls=0,mode='ok'
  const auth={detectCallerId:()=>({ok:mode!=='caller',id:'agent'}),credentialsFor:async()=>{credentials++;return {ok:mode!=='credentials',url:'https://example.invalid',user:'agent',pass:'secret-test'}}}
  const server=new McpServer({name:'batch-test',version:'1'})
- register(server,{coedit:auth,execute:async options=>{calls++;assert.equal(options.pass,'secret-test');assert.equal(options.fileId,'123');assert(['set_defined_name','create_sheet','set_chart'].includes(options.task.operations[0].intent));if(options.task.readbacks)assert.deepEqual(options.task.readbacks,[{sheet:'S',range:'A1:B2'}]);if(mode==='throw')throw Error('secret-test');return {ok:mode!=='failure',authority:'LIVE_VERIFY',noOp:true}}})
+ register(server,{coedit:auth,execute:async options=>{calls++;assert.equal(options.pass,'secret-test');assert.equal(options.fileId,'123');assert(['set_defined_name','create_sheet','set_chart','set_print_area'].includes(options.task.operations[0].intent));if(options.task.operations[0].intent==='set_print_area')assert.deepEqual(options.task.operations[0],{intent:'set_print_area',sheet:'S',range:'A1:H20',mode:'set'});if(options.task.readbacks)assert.deepEqual(options.task.readbacks,[{sheet:'S',range:'A1:B2'}]);if(mode==='throw')throw Error('secret-test');return {ok:mode!=='failure',authority:'LIVE_VERIFY',noOp:true}}})
  const client=new Client({name:'test',version:'1'}),[a,b]=InMemoryTransport.createLinkedPair()
  await Promise.all([server.connect(a),client.connect(b)])
  const request={file_id:'123',operations:[{intent:'set_defined_name',name:'Report',refersTo:'=Sheet1!$A$1'}]}
@@ -29,6 +29,8 @@ const {register,schema}=require('./xlsx-batch-mcp.cjs')
   assert.equal((await call({...request,operations:[{intent:'set_chart',sheet:'S',name:'C',range:'A1:B3',chartType:'bar',title:'T',expectedSeriesCount:1}]})).isError,false);assert.equal(calls,3)
   const core=await call({file_id:'123',operations:[{intent:'create_sheet',name:'Input'},{intent:'write_range',sheet:'Input',range:'A1:B1',values:[['x',1]]}]})
   assert.equal(core.isError,false);assert.equal(calls,4)
+  const printArea=await call({file_id:'123',operations:[{intent:'set_print_area',sheet:'S',printAreaMode:'set',range:'A1:H20'}]})
+  assert.equal(printArea.isError,false);assert.equal(calls,5)
   mode='failure';assert.equal((await call(request)).isError,true)
   mode='throw';const failed=await call(request);assert.equal(failed.isError,true);assert(!JSON.stringify(failed).includes('secret-test'))
  }finally{await client.close();await server.close()}
